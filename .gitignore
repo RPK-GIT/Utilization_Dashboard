@@ -1,0 +1,34 @@
+# dependencies
+node_modules/
+
+# next.js
+.next/
+out/
+next-env.d.ts
+
+# build artifacts
+dist/
+public/snapshot/
+
+# testing
+coverage/
+playwright-report/
+test-results/
+e2e/fixtures/*.xlsx
+e2e/.artifacts/
+
+# environment / secrets
+.env
+.env.*
+*.pem
+
+# uploaded / source data — never commit customer or team data
+*.xlsx
+*.XLSX
+*.xls
+data/
+
+# misc
+.DS_Store
+*.tsbuildinfo
+.vscode/

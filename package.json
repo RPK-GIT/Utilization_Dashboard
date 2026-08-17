@@ -1,0 +1,48 @@
+{
+  "name": "utilization-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Executive Utilization & Billing Dashboard with configuration-driven business rules, monthly Excel ingestion and self-contained HTML executive snapshots",
+  "scripts": {
+    "dev": "next dev",
+    "predev": "npm run build:snapshot",
+    "build": "next build",
+    "prebuild": "npm run build:snapshot",
+    "start": "next start",
+    "build:snapshot": "vite build --config vite.snapshot.config.ts",
+    "lint": "eslint src tests e2e",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "e2e": "playwright test",
+    "make:fixture": "node scripts/make-fixture.mjs"
+  },
+  "dependencies": {
+    "@tanstack/react-table": "^8.21.3",
+    "echarts": "^6.1.0",
+    "idb-keyval": "^6.3.0",
+    "lucide-react": "^1.31.0",
+    "next": "^16.3.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "xlsx": "file:vendor/xlsx-0.20.3.tgz",
+    "zod": "^4.4.3",
+    "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@tailwindcss/postcss": "^4.3.3",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "eslint": "^9.39.0",
+    "eslint-config-next": "^16.3.1",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.9.0",
+    "vite": "^7.3.0",
+    "vite-plugin-singlefile": "^2.3.3",
+    "vitest": "^4.1.10"
+  }
+}
