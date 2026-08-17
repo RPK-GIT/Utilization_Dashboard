@@ -15,6 +15,9 @@ import {
   persistConfigHistory,
   persistDatasets,
 } from "./db";
+import { loadFilters, saveFilters } from "@/components/filterPersistence";
+
+const FILTERS_KEY = "utilization:filters";
 
 /**
  * Interactive-mode application store. Configuration, datasets, derived data
@@ -62,6 +65,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       config: config ?? DEFAULT_CONFIG,
       configHistory: history.length > 0 ? history : [DEFAULT_CONFIG],
       datasets,
+      // A refresh keeps the user's filter state (session-scoped).
+      filters: loadFilters(FILTERS_KEY) ?? { ...EMPTY_FILTERS },
     });
   },
 
@@ -118,5 +123,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ datasets: next });
   },
 
-  setFilters: (filters) => set({ filters }),
+  setFilters: (filters) => {
+    saveFilters(FILTERS_KEY, filters);
+    set({ filters });
+  },
 }));

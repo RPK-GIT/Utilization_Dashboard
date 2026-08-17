@@ -3,22 +3,28 @@
 import * as React from "react";
 import { FilterX } from "lucide-react";
 import { useDashboard } from "../DashboardContext";
-import { Button, Chip, Input, Select } from "../ui/primitives";
-import { ActivityFilter, type ActivityOption } from "./ActivityFilter";
-import {
-  clearFilters,
-  filterChips,
-  hasActiveFilters,
-  removeChip,
-} from "@/core/filters/engine";
+import { Button, Chip } from "../ui/primitives";
+import { MultiSelectFilter, type MultiSelectOption } from "./MultiSelectFilter";
+import { DateRangeFilter } from "./DateRangeFilter";
+import { clearFilters, hasActiveFilters } from "@/core/filters/engine";
 import { activityLabel, periodLabel } from "@/core/format";
+import type { FilterState } from "@/core/types";
 
 /**
- * Executive filter bar — one row above everything it scopes. Every KPI,
- * chart, table and drilldown below re-renders against the same slice.
- * Active filters render as removable chips; activity chips are
- * description-first.
+ * Executive filter bar — one row above everything it scopes. Every filter is
+ * a checkbox multi-select (values within one filter OR together; different
+ * filters AND together); the date range is explicitly labeled and validated.
+ * Active selections render as chips, summarized when a dimension has many
+ * values.
  */
+
+interface ChipGroup {
+  key: keyof FilterState;
+  label: string;
+  values: string[];
+  display: (value: string) => string;
+}
+
 export function FilterBar() {
   const { rows, filters, setFilters, availablePeriods, config } = useDashboard();
 
@@ -37,8 +43,9 @@ export function FilterBar() {
     return [...inData].sort();
   }, [rows]);
 
-  // Activity options: codes present in the data, described from configuration.
-  const activityOptions = React.useMemo<ActivityOption[]>(() => {
+  // Activity options: codes present in the data, described from configuration
+  // (description first, code secondary — searchable by either).
+  const activityOptions = React.useMemo<MultiSelectOption[]>(() => {
     const codesInData = [
       ...new Set(rows.map((r) => r.developmentCode).filter((c): c is string => !!c)),
     ];
@@ -47,12 +54,13 @@ export function FilterBar() {
         const configured = config.codes.find(
           (c) => c.code.toUpperCase() === code.toUpperCase(),
         );
-        const description = configured?.description ?? null;
+        const description = configured?.description ?? "Unknown code";
+        const category = configured?.category ?? "Unknown";
         return {
-          code,
-          description: description ?? "Unknown code",
-          category: configured?.category ?? "Unknown",
-          label: activityLabel(description, code),
+          value: code,
+          label: description === "Unknown code" ? `Unknown code (${code})` : description,
+          sublabel: `${code} · ${category}`,
+          keywords: `${code} ${category}`,
         };
       })
       .sort((a, b) => a.label.localeCompare(b.label));
@@ -60,88 +68,74 @@ export function FilterBar() {
 
   const codeLabel = React.useCallback(
     (code: string) =>
-      activityOptions.find((o) => o.code === code)?.label ??
       activityLabel(
         config.codes.find((c) => c.code.toUpperCase() === code.toUpperCase())
           ?.description,
         code,
       ),
-    [activityOptions, config.codes],
+    [config.codes],
   );
 
-  const chips = filterChips(filters, periodLabel, codeLabel);
   const active = hasActiveFilters(filters);
+  const setList =
+    (key: "periods" | "teams" | "employees" | "categories" | "codes") =>
+    (values: string[]) =>
+      setFilters({ ...filters, [key]: values });
 
-  const single = (values: string[]) => (values.length === 1 ? values[0] : "");
-  const setList = (key: "periods" | "teams" | "employees" | "categories") =>
-    (e: React.ChangeEvent<HTMLSelectElement>) =>
-      setFilters({ ...filters, [key]: e.target.value ? [e.target.value] : [] });
+  const chipGroups: ChipGroup[] = [
+    { key: "periods", label: "Period", values: filters.periods, display: periodLabel },
+    { key: "teams", label: "Team", values: filters.teams, display: (v) => v },
+    { key: "employees", label: "Employee", values: filters.employees, display: (v) => v },
+    { key: "categories", label: "Category", values: filters.categories, display: (v) => v },
+    { key: "codes", label: "Activity", values: filters.codes, display: codeLabel },
+  ];
 
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
-        <Select
-          aria-label="Period"
-          value={single(filters.periods)}
-          onChange={setList("periods")}
-        >
-          <option value="">All periods</option>
-          {availablePeriods.map((p) => (
-            <option key={p.period} value={p.period}>
-              {p.label}
-            </option>
-          ))}
-        </Select>
-        <Select aria-label="Team" value={single(filters.teams)} onChange={setList("teams")}>
-          <option value="">All teams</option>
-          {teams.map((t) => (
-            <option key={t} value={t}>
-              {t}
-            </option>
-          ))}
-        </Select>
-        <Select
-          aria-label="Employee"
-          value={single(filters.employees)}
-          onChange={setList("employees")}
-        >
-          <option value="">All employees</option>
-          {employees.map((e) => (
-            <option key={e} value={e}>
-              {e}
-            </option>
-          ))}
-        </Select>
-        <Select
-          aria-label="Category"
-          value={single(filters.categories)}
-          onChange={setList("categories")}
-        >
-          <option value="">All categories</option>
-          {categories.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </Select>
-        <ActivityFilter
+        <MultiSelectFilter
+          label="Period"
+          testId="filter-period"
+          options={availablePeriods.map((p) => ({ value: p.period, label: p.label }))}
+          selected={filters.periods}
+          onApply={setList("periods")}
+        />
+        <MultiSelectFilter
+          label="Team"
+          testId="filter-team"
+          options={teams.map((t) => ({ value: t, label: t }))}
+          selected={filters.teams}
+          onApply={setList("teams")}
+        />
+        <MultiSelectFilter
+          label="Employee"
+          testId="filter-employee"
+          searchable
+          searchPlaceholder="Search employees…"
+          options={employees.map((e) => ({ value: e, label: e }))}
+          selected={filters.employees}
+          onApply={setList("employees")}
+        />
+        <MultiSelectFilter
+          label="Category"
+          testId="filter-category"
+          options={categories.map((c) => ({ value: c, label: c }))}
+          selected={filters.categories}
+          onApply={setList("categories")}
+        />
+        <MultiSelectFilter
+          label="Activity"
+          testId="filter-activity"
+          searchable
+          searchPlaceholder="Search description, code or category…"
           options={activityOptions}
           selected={filters.codes}
-          onChange={(codes) => setFilters({ ...filters, codes })}
+          onApply={setList("codes")}
         />
-        <Input
-          type="date"
-          aria-label="From date"
-          value={filters.dateFrom ?? ""}
-          onChange={(e) =>
-            setFilters({ ...filters, dateFrom: e.target.value || null })
-          }
-        />
-        <Input
-          type="date"
-          aria-label="To date"
-          value={filters.dateTo ?? ""}
-          onChange={(e) => setFilters({ ...filters, dateTo: e.target.value || null })}
+        <DateRangeFilter
+          from={filters.dateFrom}
+          to={filters.dateTo}
+          onApply={(dateFrom, dateTo) => setFilters({ ...filters, dateFrom, dateTo })}
         />
         {active ? (
           <Button variant="ghost" onClick={() => setFilters(clearFilters())}>
@@ -150,16 +144,56 @@ export function FilterBar() {
           </Button>
         ) : null}
       </div>
-      {chips.length > 0 ? (
+      {active ? (
         <div className="flex flex-wrap items-center gap-1.5" data-testid="filter-chips">
           <span className="text-xs font-medium text-muted">Filtered:</span>
-          {chips.map((chip) => (
+          {chipGroups.map((group) => {
+            if (group.values.length === 0) return null;
+            // Few values: individual removable chips. Many: one summary chip.
+            if (group.values.length <= 3) {
+              return group.values.map((value) => (
+                <Chip
+                  key={`${group.key}:${value}`}
+                  label={`${group.label}: ${group.display(value)}`}
+                  onRemove={() =>
+                    setFilters({
+                      ...filters,
+                      [group.key]: group.values.filter((v) => v !== value),
+                    })
+                  }
+                />
+              ));
+            }
+            return (
+              <span
+                key={group.key}
+                title={group.values.map(group.display).join(", ")}
+              >
+                <Chip
+                  label={`${group.label}: ${group.values.length} selected`}
+                  onRemove={() => setFilters({ ...filters, [group.key]: [] })}
+                />
+              </span>
+            );
+          })}
+          {filters.dateFrom ? (
             <Chip
-              key={`${chip.kind}:${chip.value}`}
-              label={chip.label}
-              onRemove={() => setFilters(removeChip(filters, chip))}
+              label={`From Date: ${filters.dateFrom}`}
+              onRemove={() => setFilters({ ...filters, dateFrom: null })}
             />
-          ))}
+          ) : null}
+          {filters.dateTo ? (
+            <Chip
+              label={`To Date: ${filters.dateTo}`}
+              onRemove={() => setFilters({ ...filters, dateTo: null })}
+            />
+          ) : null}
+          {filters.search.trim() ? (
+            <Chip
+              label={`Search: ${filters.search.trim()}`}
+              onRemove={() => setFilters({ ...filters, search: "" })}
+            />
+          ) : null}
         </div>
       ) : null}
     </div>

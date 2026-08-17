@@ -11,6 +11,7 @@ import "../app/globals.css";
 import type { FilterState, SnapshotPayload } from "@/core/types";
 import { DashboardProvider } from "@/components/DashboardContext";
 import { DashboardApp, type SectionDef } from "@/components/DashboardApp";
+import { loadFilters, saveFilters } from "@/components/filterPersistence";
 import { OverviewView } from "@/components/views/OverviewView";
 import { TeamView } from "@/components/views/TeamView";
 import { IpAccelView } from "@/components/views/IpAccelView";
@@ -50,7 +51,19 @@ function readPayload(): SnapshotPayload | null {
 }
 
 function SnapshotViewer({ payload }: { payload: SnapshotPayload }) {
-  const [filters, setFilters] = React.useState<FilterState>(payload.initialFilters);
+  // Keyed by generation time so different snapshot files don't share state;
+  // a refresh keeps the viewer's filter changes within the session.
+  const storageKey = `snapshot:filters:${payload.generatedAt}`;
+  const [filters, setFiltersState] = React.useState<FilterState>(
+    () => loadFilters(storageKey) ?? payload.initialFilters,
+  );
+  const setFilters = React.useCallback(
+    (next: FilterState) => {
+      saveFilters(storageKey, next);
+      setFiltersState(next);
+    },
+    [storageKey],
+  );
   return (
     <DashboardProvider
       value={{

@@ -6,33 +6,44 @@ import { Card } from "../ui/primitives";
 import { computeKpis } from "@/core/metrics/engine";
 import { formatKpi } from "@/core/format";
 import { hasActiveFilters } from "@/core/filters/engine";
-import { goDetail, goSection } from "../navigation";
+import { goDetail } from "../navigation";
+import type { SnapshotConfig } from "@/core/types";
 
 /**
  * KPI stat tiles. Values come exclusively from the central metric engine
- * applied to the filtered scope. KPIs that represent a meaningful subset of
- * source data navigate to the corresponding detail on click.
+ * applied to the filtered scope. Every KPI that represents a subset of the
+ * source data navigates to a routed detail page (with ← Back) on click —
+ * ratio KPIs (percentages) stay non-clickable by design.
  */
 
-const KPI_NAVIGATION: Record<string, () => void> = {
-  total_hours: () => goSection("detail"),
-  billable_hours: () => goDetail("classification", "Billable"),
-  productive_hours: () => goDetail("classification", "Productive"),
-  development_hours: () => goDetail("classification", "Development"),
-  ip_hours: () => goDetail("category", "IP"),
-  accelerator_hours: () => goDetail("category", "Accelerator"),
-};
+function kpiNavigation(config: SnapshotConfig): Record<string, () => void> {
+  const teamName = (id: string) => config.teams.find((t) => t.id === id)?.name;
+  const nav: Record<string, () => void> = {
+    total_hours: () => goDetail("classification", "Total"),
+    billable_hours: () => goDetail("classification", "Billable"),
+    productive_hours: () => goDetail("classification", "Productive"),
+    development_hours: () => goDetail("classification", "Development"),
+    ip_hours: () => goDetail("category", "IP"),
+    accelerator_hours: () => goDetail("category", "Accelerator"),
+  };
+  const ipDelivery = teamName("ip-delivery");
+  if (ipDelivery) nav.ip_delivery_hours = () => goDetail("team", ipDelivery);
+  const development = teamName("development");
+  if (development) nav.development_team_hours = () => goDetail("team", development);
+  return nav;
+}
 
 export function KpiCards({ ids }: { ids?: string[] }) {
   const { filtered, config, filters } = useDashboard();
   const kpis = React.useMemo(() => computeKpis(filtered, config), [filtered, config]);
+  const navigation = React.useMemo(() => kpiNavigation(config), [config]);
   const shown = ids ? kpis.filter((k) => ids.includes(k.id)) : kpis;
   const filteredScope = hasActiveFilters(filters);
 
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8">
       {shown.map((kpi) => {
-        const navigate = KPI_NAVIGATION[kpi.id];
+        const navigate = navigation[kpi.id];
         const body = (
           <>
             <p className="truncate text-xs text-ink-2" title={kpi.description}>

@@ -4,6 +4,10 @@ import { EMPTY_FILTERS } from "../types";
 /**
  * Filter engine. A single applyFilters() feeds every KPI card, chart, table
  * and drilldown so filtered views stay consistent across the application.
+ *
+ * Semantics: values WITHIN one dimension combine with OR (a row matches any
+ * selected team), while different dimensions combine with AND (row must match
+ * team AND category AND date range).
  */
 
 export function applyFilters(
@@ -54,6 +58,29 @@ export function clearFilters(): FilterState {
   return { ...EMPTY_FILTERS };
 }
 
+export interface DateRangeValidation {
+  ok: boolean;
+  error: string | null;
+}
+
+/**
+ * Validates a From/To date pair. Either side may be empty (open-ended range;
+ * both empty means no date filter), From == To is a valid single-day range,
+ * but To must never be earlier than From.
+ */
+export function validateDateRange(
+  from: string | null,
+  to: string | null,
+): DateRangeValidation {
+  if (from && to && to < from) {
+    return {
+      ok: false,
+      error: "To Date cannot be earlier than From Date. Please select a valid date range.",
+    };
+  }
+  return { ok: true, error: null };
+}
+
 export interface FilterChip {
   kind: keyof FilterState;
   label: string;
@@ -81,9 +108,17 @@ export function filterChips(
   for (const c of filters.codes)
     chips.push({ kind: "codes", label: `Activity: ${codeLabel(c)}`, value: c });
   if (filters.dateFrom)
-    chips.push({ kind: "dateFrom", label: `From: ${filters.dateFrom}`, value: filters.dateFrom });
+    chips.push({
+      kind: "dateFrom",
+      label: `From Date: ${filters.dateFrom}`,
+      value: filters.dateFrom,
+    });
   if (filters.dateTo)
-    chips.push({ kind: "dateTo", label: `To: ${filters.dateTo}`, value: filters.dateTo });
+    chips.push({
+      kind: "dateTo",
+      label: `To Date: ${filters.dateTo}`,
+      value: filters.dateTo,
+    });
   if (filters.search.trim())
     chips.push({ kind: "search", label: `Search: ${filters.search.trim()}`, value: filters.search });
   return chips;

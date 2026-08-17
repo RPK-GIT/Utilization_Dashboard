@@ -2,14 +2,20 @@ import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { configureFixtureTeam, ensureFixture, importFixture, resetApp } from "./helpers";
+import {
+  applyMultiFilter,
+  configureFixtureTeam,
+  ensureFixture,
+  importFixture,
+  resetApp,
+} from "./helpers";
 
 /**
  * End-to-end: executive snapshot generation and offline verification. The
  * downloaded HTML is opened from disk via file:// in a NEW offline browser
  * context — no dev server, backend or network — and must render, navigate,
- * filter, chart-drill into actual records and go Back, with no admin surface
- * present (the §20/§21 acceptance flow).
+ * multi-select filter, validate dates, KPI/chart-drill into actual records
+ * and go Back, with no admin surface present.
  */
 
 test.beforeAll(() => ensureFixture());
@@ -38,7 +44,7 @@ test("generates a self-contained executive snapshot that works offline", async (
   await importFixture(page);
 
   // Apply a filter so "current view" state is captured.
-  await page.getByLabel("Team", { exact: true }).selectOption("IP Delivery Team");
+  await applyMultiFilter(page, "filter-team", ["IP Delivery Team"]);
 
   await page.getByTestId("generate-snapshot").click();
   const downloadPromise = page.waitForEvent("download");
@@ -53,7 +59,7 @@ test("generates a self-contained executive snapshot that works offline", async (
   const file = path.join(artifactDir, download.suggestedFilename());
   await download.saveAs(file);
 
-  // 3. Open the snapshot from disk (file://) in a fresh OFFLINE context.
+  // Open the snapshot from disk (file://) in a fresh OFFLINE context.
   const offline = await browser.newContext({ offline: true });
   const snap = await offline.newPage();
   const failedRequests: string[] = [];
@@ -62,14 +68,27 @@ test("generates a self-contained executive snapshot that works offline", async (
   });
   await snap.goto(pathToFileURL(file).href);
 
-  // 4–6. Dashboard loads with KPI cards and charts, in the captured state.
+  // Dashboard loads with KPI cards and charts, in the captured state.
   await expect(snap.getByTestId("kpi-total_hours")).toHaveText("42");
   await expect(snap.getByTestId("filter-chips")).toContainText("Team: IP Delivery Team");
   await expect(snap.getByText("frozen point-in-time snapshot")).toBeVisible();
   expect(await snap.locator("canvas").count()).toBeGreaterThan(0);
 
-  // 7–9. Click a chart bar → drilldown opens with the actual source records
-  // (description-first title, code as secondary information).
+  // KPI navigation inside the snapshot: Total Hours → detail → Back.
+  await snap.getByTestId("kpi-card-total_hours").click();
+  await expect(snap.getByTestId("detail-title")).toHaveText("Total hours");
+  await expect(snap.getByTestId("detail-transactions")).toBeVisible();
+  await snap.getByTestId("detail-back").click();
+  await expect(snap.getByTestId("kpi-total_hours")).toHaveText("42");
+
+  // IP Delivery Hours KPI → team detail → Back, filters preserved.
+  await snap.getByTestId("kpi-card-ip_delivery_hours").click();
+  await expect(snap.getByTestId("detail-title")).toHaveText("IP Delivery Team hours");
+  await expect(snap.getByTestId("detail-transactions")).toContainText("Ivy Ipdelivery");
+  await snap.getByTestId("detail-back").click();
+  await expect(snap.getByTestId("filter-chips")).toContainText("Team: IP Delivery Team");
+
+  // Chart drilldown: click a bar → detail with actual records → Back.
   await clickTopChartBar(snap, "Top IPs by hours");
   await expect(snap.getByTestId("detail-title")).toHaveText(
     "Digital Time entry Cockpit Simplified",
@@ -78,23 +97,36 @@ test("generates a self-contained executive snapshot that works offline", async (
   await expect(snap.getByTestId("detail-transactions")).toContainText(
     "DTEC development sprint",
   );
-
-  // 10–11. Back returns to the previous dashboard view, filters preserved.
   await snap.getByTestId("detail-back").click();
   await expect(snap.getByTestId("kpi-total_hours")).toHaveText("42");
   await expect(snap.getByTestId("filter-chips")).toContainText("Team: IP Delivery Team");
 
-  // 12–13. Changing a filter recalculates KPIs from the embedded dataset.
-  await snap.getByRole("button", { name: "Clear filters" }).click();
+  // Multi-select works in the snapshot: both teams selected → full scope.
+  await applyMultiFilter(snap, "filter-team", ["Development Team"]);
   await expect(snap.getByTestId("kpi-total_hours")).toHaveText("86.5");
-  await snap.getByTestId("activity-filter").click();
-  await snap.getByTestId("activity-search").fill("Digital Time");
+  await snap.getByRole("button", { name: "Clear filters" }).click();
+
+  // Activity multi-select (description-first, search by code).
+  await snap.getByTestId("filter-activity").click();
+  await snap.getByTestId("filter-activity-search").fill("DTEC");
   await snap
     .getByRole("listbox")
-    .getByText("Digital Time entry Cockpit Simplified (DTEC)")
+    .getByText("Digital Time entry Cockpit Simplified")
     .click();
-  await snap.keyboard.press("Escape");
+  await snap.getByTestId("filter-activity-apply").click();
   await expect(snap.getByTestId("kpi-total_hours")).toHaveText("14");
+  await snap.getByRole("button", { name: "Clear filters" }).click();
+
+  // Date labels and validation behave identically in the snapshot.
+  await expect(snap.getByText("From Date", { exact: true })).toBeVisible();
+  await expect(snap.getByText("To Date", { exact: true })).toBeVisible();
+  await snap.getByTestId("from-date").fill("2026-07-20");
+  await snap.getByTestId("to-date").fill("2026-07-10");
+  await expect(snap.getByTestId("date-error")).toBeVisible();
+  await expect(snap.getByTestId("apply-dates")).toBeDisabled();
+  await snap.getByTestId("from-date").fill("2026-07-06");
+  await snap.getByTestId("apply-dates").click();
+  await expect(snap.getByTestId("kpi-total_hours")).toHaveText("40");
   await snap.getByRole("button", { name: "Clear filters" }).click();
 
   // Navigation works (hash routing on file://) — back/forward included.
@@ -120,7 +152,7 @@ test("generates a self-contained executive snapshot that works offline", async (
   await snap.locator("[data-nav=team]").click();
   await snap.getByRole("columnheader", { name: "Total Hours" }).click();
 
-  // 15. No admin/config surface, no upload, no generate button.
+  // No admin/config surface, no upload, no generate button.
   await expect(snap.locator("[data-nav=admin]")).toHaveCount(0);
   await expect(snap.locator("[data-nav=import]")).toHaveCount(0);
   await expect(snap.locator("[data-nav=datasets]")).toHaveCount(0);
@@ -129,7 +161,7 @@ test("generates a self-contained executive snapshot that works offline", async (
   const html = await snap.content();
   expect(html).not.toContain("localhost");
 
-  // 14. Fully offline: no external request may have been attempted.
+  // Fully offline: no external request may have been attempted.
   expect(failedRequests).toEqual([]);
 
   await offline.close();

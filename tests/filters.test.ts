@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { classifyRows } from "@/core/classify/engine";
-import { applyFilters, filterChips, hasActiveFilters, removeChip } from "@/core/filters/engine";
+import {
+  applyFilters,
+  filterChips,
+  hasActiveFilters,
+  removeChip,
+  validateDateRange,
+} from "@/core/filters/engine";
 import { computeKpis, kpiValue } from "@/core/metrics/engine";
 import { EMPTY_FILTERS } from "@/core/types";
 import { periodLabel } from "@/core/format";
@@ -72,6 +78,52 @@ describe("filter engine", () => {
     expect(
       applyFilters(rows, { ...EMPTY_FILTERS, search: "0085I" }).length,
     ).toBeGreaterThan(0);
+  });
+
+  it("multiple values within one dimension combine with OR", () => {
+    const { rows } = setup();
+    const both = applyFilters(rows, {
+      ...EMPTY_FILTERS,
+      teams: ["IP Delivery Team", "Development Team"],
+    });
+    expect(both).toHaveLength(rows.length);
+
+    const twoCodes = applyFilters(rows, {
+      ...EMPTY_FILTERS,
+      codes: ["DTEC", "MSLM"],
+    });
+    expect(twoCodes.map((r) => r.developmentCode).sort()).toEqual(["DTEC", "MSLM"]);
+  });
+
+  it("different dimensions combine with AND", () => {
+    const { rows } = setup();
+    // Team OR-list AND category OR-list: only development rows in IP or
+    // Accelerator categories belonging to either team.
+    const combined = applyFilters(rows, {
+      ...EMPTY_FILTERS,
+      teams: ["IP Delivery Team", "Development Team"],
+      categories: ["IP", "Accelerator"],
+    });
+    expect(combined).toHaveLength(3); // DTEC, MSLM, 2PC rows
+    // Narrowing team to IP Delivery keeps only its IP row (DTEC).
+    const narrowed = applyFilters(rows, {
+      ...EMPTY_FILTERS,
+      teams: ["IP Delivery Team"],
+      categories: ["IP", "Accelerator"],
+    });
+    expect(narrowed.map((r) => r.developmentCode)).toEqual(["DTEC"]);
+  });
+
+  it("date range validation: To must not be earlier than From", () => {
+    expect(validateDateRange("2026-08-01", "2026-08-31").ok).toBe(true);
+    expect(validateDateRange("2026-08-01", "2026-08-01").ok).toBe(true); // same day
+    const invalid = validateDateRange("2026-08-31", "2026-08-01");
+    expect(invalid.ok).toBe(false);
+    expect(invalid.error).toMatch(/cannot be earlier than From Date/);
+    // Open-ended and empty ranges are valid.
+    expect(validateDateRange("2026-08-01", null).ok).toBe(true);
+    expect(validateDateRange(null, "2026-08-31").ok).toBe(true);
+    expect(validateDateRange(null, null).ok).toBe(true);
   });
 
   it("chips reflect active filters and can be removed", () => {

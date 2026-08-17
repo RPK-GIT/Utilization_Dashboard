@@ -269,10 +269,46 @@ function MonthDetail({ value }: { value: string }) {
   );
 }
 
+function TeamDetail({ value }: { value: string }) {
+  const { filtered } = useDashboard();
+  const rows = React.useMemo(
+    () => filtered.filter((r) => r.team === value),
+    [filtered, value],
+  );
+  const byCategory = groupHours(rows, (r) => r.developmentCategory ?? r.classification);
+  return (
+    <DetailShell title={`${value} hours`} subtitle="All source transactions logged by this team's members">
+      <CoreStats rows={rows} />
+      <div className="grid gap-4 lg:grid-cols-2">
+        <EmployeeBars rows={rows} />
+        <Card>
+          <CardHeader title="Hours by category" subtitle="Click a bar for the category detail" />
+          <div className="px-3 pb-3">
+            <EChart
+              option={horizontalBars(
+                byCategory.slice(0, 10).map((b) => ({ name: b.key, value: b.hours })),
+              )}
+              height={Math.max(160, byCategory.slice(0, 10).length * 30 + 60)}
+              onClick={(p) => p.name && goDetail("category", p.name)}
+              ariaLabel={`Hours by category for ${value}`}
+            />
+          </div>
+        </Card>
+      </div>
+      <Transactions rows={rows} csvName={`team_${value}.csv`} />
+    </DetailShell>
+  );
+}
+
 const CLASSIFICATION_FILTERS: Record<
   string,
   { title: string; subtitle: string; predicate: (r: ClassifiedRow) => boolean }
 > = {
+  Total: {
+    title: "Total hours",
+    subtitle: "All source transactions contributing to Total Hours",
+    predicate: () => true,
+  },
   Billable: {
     title: "Billable hours",
     subtitle: "Rows classified billable by the configured WBS rules",
@@ -322,6 +358,8 @@ export function DetailPage({ route }: { route: DetailRoute }) {
       return <CodeDetail value={route.value} />;
     case "category":
       return <CategoryDetail value={route.value} />;
+    case "team":
+      return <TeamDetail value={route.value} />;
     case "month":
       return <MonthDetail value={route.value} />;
     case "classification":

@@ -110,7 +110,10 @@ function CategorySection({
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
-          <CardHeader title={`${category} hours by team`} />
+          <CardHeader
+            title={`${category} hours by team`}
+            subtitle="Click a bar for the team detail"
+          />
           <div className="px-3 pb-3">
             <EChart
               option={horizontalBars(
@@ -118,6 +121,7 @@ function CategorySection({
                 { color },
               )}
               height={Math.max(120, byTeam.length * 44 + 60)}
+              onClick={(p) => p.name && goDetail("team", p.name)}
               ariaLabel={`${category} hours by team`}
             />
           </div>

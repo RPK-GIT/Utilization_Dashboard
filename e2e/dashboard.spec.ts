@@ -1,12 +1,18 @@
 import { expect, test } from "@playwright/test";
-import { configureFixtureTeam, ensureFixture, importFixture, resetApp } from "./helpers";
+import {
+  applyMultiFilter,
+  configureFixtureTeam,
+  ensureFixture,
+  importFixture,
+  resetApp,
+} from "./helpers";
 
 /**
- * End-to-end: import workflow, KPI calculation, filters, description-first
- * activity labels, routed drilldowns with Back, and data quality — using the
- * synthetic fixture export (structure identical to the real monthly file,
- * fictional employees). Expected values are documented in
- * scripts/make-fixture.mjs.
+ * End-to-end: import workflow, KPI calculation, multi-select filters, date
+ * validation, description-first activity labels, routed drilldowns with Back,
+ * and data quality — using the synthetic fixture export (structure identical
+ * to the real monthly file, fictional employees). Expected values are
+ * documented in scripts/make-fixture.mjs.
  */
 
 test.beforeAll(() => ensureFixture());
@@ -28,50 +34,90 @@ test("imports the monthly excel, computes KPIs, filters and drills down", async 
   await expect(page.getByTestId("kpi-productive_percentage")).toHaveText("60.7%");
   await expect(page.getByTestId("kpi-ip_delivery_hours")).toHaveText("42");
 
-  // Team filter recalculates every KPI from the same filtered scope.
-  await page.getByLabel("Team", { exact: true }).selectOption("IP Delivery Team");
+  // Team filter (checkbox multi-select) recalculates every KPI consistently.
+  await applyMultiFilter(page, "filter-team", ["IP Delivery Team"]);
   await expect(page.getByTestId("kpi-total_hours")).toHaveText("42");
   await expect(page.getByTestId("kpi-billable_hours")).toHaveText("16");
   await expect(page.getByTestId("kpi-billable_percentage")).toHaveText("38.1%");
   await expect(page.getByTestId("filter-chips")).toContainText("Team: IP Delivery Team");
 
+  // Selecting BOTH teams includes both (OR within a dimension).
+  await applyMultiFilter(page, "filter-team", ["Development Team"]);
+  await expect(page.getByTestId("kpi-total_hours")).toHaveText("86.5");
+  await page.getByRole("button", { name: "Clear filters" }).click();
+
   // Activity filter is description-first and searches description AND code.
-  await page.getByTestId("activity-filter").click();
-  await page.getByTestId("activity-search").fill("Digital Time");
+  await page.getByTestId("filter-activity").click();
+  await page.getByTestId("filter-activity-search").fill("Digital Time");
   await expect(
-    page.getByRole("listbox").getByText("Digital Time entry Cockpit Simplified (DTEC)"),
+    page.getByRole("listbox").getByText("Digital Time entry Cockpit Simplified"),
   ).toBeVisible();
-  await page.getByTestId("activity-search").fill("DTEC");
+  await page.getByTestId("filter-activity-search").fill("DTEC");
   await page
     .getByRole("listbox")
-    .getByText("Digital Time entry Cockpit Simplified (DTEC)")
+    .getByText("Digital Time entry Cockpit Simplified")
     .click();
-  await page.keyboard.press("Escape");
+  await page.getByTestId("filter-activity-apply").click();
   await expect(page.getByTestId("kpi-total_hours")).toHaveText("14");
   await expect(page.getByTestId("kpi-ip_hours")).toHaveText("14");
   await expect(page.getByTestId("filter-chips")).toContainText(
     "Activity: Digital Time entry Cockpit Simplified (DTEC)",
   );
-
-  // Clear all filters restores the full scope.
-  await page.getByRole("button", { name: "Clear filters" }).click();
-  await expect(page.getByTestId("kpi-total_hours")).toHaveText("86.5");
-
-  // Employee filter.
-  await page.getByLabel("Employee", { exact: true }).selectOption("Devon Developer");
-  await expect(page.getByTestId("kpi-total_hours")).toHaveText("30");
   await page.getByRole("button", { name: "Clear filters" }).click();
 
-  // KPI card navigates to the classification detail with source records.
+  // Multi-select employees: Ivy (22h) + Devon (30h) = 52.
+  await applyMultiFilter(page, "filter-employee", ["Ivy Ipdelivery", "Devon Developer"]);
+  await expect(page.getByTestId("kpi-total_hours")).toHaveText("52");
+  await page.getByRole("button", { name: "Clear filters" }).click();
+
+  // Explicit date labels; invalid range blocks Apply immediately.
+  await expect(page.getByText("From Date", { exact: true })).toBeVisible();
+  await expect(page.getByText("To Date", { exact: true })).toBeVisible();
+  await page.getByTestId("from-date").fill("2026-07-20");
+  await page.getByTestId("to-date").fill("2026-07-10");
+  await expect(page.getByTestId("date-error")).toContainText(
+    "To Date cannot be earlier than From Date",
+  );
+  await expect(page.getByTestId("apply-dates")).toBeDisabled();
+  // Correcting the range enables Apply; rows 6–10 Jul = 8+8+8+6+4+6 = 40.
+  await page.getByTestId("to-date").fill("2026-07-10");
+  await page.getByTestId("from-date").fill("2026-07-06");
+  await expect(page.getByTestId("date-error")).toHaveCount(0);
+  await page.getByTestId("apply-dates").click();
+  await expect(page.getByTestId("kpi-total_hours")).toHaveText("40");
+  await expect(page.getByTestId("filter-chips")).toContainText("From Date: 2026-07-06");
+  await expect(page.getByTestId("filter-chips")).toContainText("To Date: 2026-07-10");
+  await page.getByRole("button", { name: "Clear filters" }).click();
+
+  // Total Hours KPI navigates to a routed detail with Back.
+  await page.getByTestId("kpi-card-total_hours").click();
+  await expect(page.getByTestId("detail-title")).toHaveText("Total hours");
+  await expect(page.getByTestId("detail-transactions")).toBeVisible();
+  await page.getByTestId("detail-back").click();
+  await expect(page.getByTestId("kpi-total_hours")).toBeVisible();
+
+  // IP Delivery Hours KPI navigates to the team detail with source records.
+  await page.getByTestId("kpi-card-ip_delivery_hours").click();
+  await expect(page.getByTestId("detail-title")).toHaveText("IP Delivery Team hours");
+  await expect(page.getByTestId("detail-transactions")).toContainText("Ivy Ipdelivery");
+  await page.getByTestId("detail-back").click();
+
+  // Billable Hours KPI detail.
   await page.getByTestId("kpi-card-billable_hours").click();
   await expect(page.getByTestId("detail-title")).toHaveText("Billable hours");
   await expect(page.getByTestId("detail-transactions")).toContainText("Customer work");
   await page.getByTestId("detail-back").click();
-  await expect(page.getByTestId("kpi-total_hours")).toBeVisible();
 
-  // Team utilization page: row click opens the routed employee detail;
-  // Back returns and the active filter state is preserved.
-  await page.getByLabel("Team", { exact: true }).selectOption("IP Delivery Team");
+  // Filter state survives KPI navigation and Back.
+  await applyMultiFilter(page, "filter-team", ["IP Delivery Team"]);
+  await page.getByTestId("kpi-card-ip_hours").click();
+  await expect(page.getByTestId("detail-title")).toHaveText("IP");
+  await expect(page.getByTestId("filter-chips")).toContainText("Team: IP Delivery Team");
+  await page.getByTestId("detail-back").click();
+  await expect(page.getByTestId("filter-chips")).toContainText("Team: IP Delivery Team");
+  await expect(page.getByTestId("kpi-total_hours")).toHaveText("42");
+
+  // Team utilization page: row click opens the routed employee detail.
   await page.locator("[data-nav=team]").click();
   await expect(page.getByTestId("team-table")).toContainText("Ivy Ipdelivery");
   await page.getByTestId("team-table").getByText("Ivy Ipdelivery").first().click();
@@ -102,7 +148,7 @@ test("imports the monthly excel, computes KPIs, filters and drills down", async 
     "DTEC development sprint",
   );
 
-  // Browser back also returns from the detail route.
+  // Browser back also returns from the detail route with tab state intact.
   await page.goBack();
   await expect(page.getByTestId("code-table")).toBeVisible();
 

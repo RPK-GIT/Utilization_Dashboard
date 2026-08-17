@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { resetApp } from "./helpers";
+import { applyMultiFilter, resetApp } from "./helpers";
 
 /**
  * Verification against the real monthly export. Runs only when
@@ -45,7 +45,7 @@ test("dashboard reproduces independently computed KPIs from the real export", as
   await expect(page.getByTestId("kpi-ip_delivery_hours")).toHaveText("737.5");
 
   // IP Delivery Team scope: 737.5 total, 384 billable → 52.1% (ratio of sums).
-  await page.getByLabel("Team", { exact: true }).selectOption("IP Delivery Team");
+  await applyMultiFilter(page, "filter-team", ["IP Delivery Team"]);
   await expect(page.getByTestId("kpi-total_hours")).toHaveText("737.5");
   await expect(page.getByTestId("kpi-billable_hours")).toHaveText("384");
   await expect(page.getByTestId("kpi-billable_percentage")).toHaveText("52.1%");

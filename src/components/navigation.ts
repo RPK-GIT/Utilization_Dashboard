@@ -11,6 +11,7 @@ export type DetailKind =
   | "employee"
   | "code"
   | "category"
+  | "team"
   | "month"
   | "classification";
 
@@ -28,6 +29,7 @@ const DETAIL_KINDS: DetailKind[] = [
   "employee",
   "code",
   "category",
+  "team",
   "month",
   "classification",
 ];

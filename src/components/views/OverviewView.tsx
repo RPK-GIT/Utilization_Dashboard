@@ -92,12 +92,13 @@ export function OverviewView() {
         <Card>
           <CardHeader
             title="Team billability"
-            subtitle="Billable share of each team's hours"
+            subtitle="Billable share of each team's hours — click a bar for the team detail"
           />
           <div className="px-3 pb-3">
             <EChart
               option={horizontalBars(teamBillability, { format: "percent" })}
               height={Math.max(140, teamBillability.length * 44 + 60)}
+              onClick={(p) => p.name && goDetail("team", p.name)}
               ariaLabel="Billable percentage by team"
             />
           </div>

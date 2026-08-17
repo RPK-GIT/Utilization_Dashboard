@@ -33,6 +33,19 @@ export async function configureFixtureTeam(page: Page): Promise<void> {
   await expect(page.getByTestId("save-message")).toBeVisible();
 }
 
+/** Opens a multi-select filter popover, checks the given options, applies. */
+export async function applyMultiFilter(
+  page: Page,
+  testId: string,
+  values: string[],
+): Promise<void> {
+  await page.getByTestId(testId).click();
+  for (const value of values) {
+    await page.getByRole("listbox").getByText(value, { exact: true }).first().click();
+  }
+  await page.getByTestId(`${testId}-apply`).click();
+}
+
 /** Runs the full import wizard with the synthetic fixture. */
 export async function importFixture(page: Page): Promise<void> {
   await page.goto("/#/import");
