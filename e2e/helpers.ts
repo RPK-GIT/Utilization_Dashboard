@@ -33,8 +33,8 @@ export async function configureFixtureTeam(page: Page): Promise<void> {
   await expect(page.getByTestId("save-message")).toBeVisible();
 }
 
-/** Opens a multi-select filter popover, checks the given options, applies. */
-export async function applyMultiFilter(
+/** Checks options in a multi-select popover (edits the DRAFT state only). */
+export async function selectFilterValues(
   page: Page,
   testId: string,
   values: string[],
@@ -43,7 +43,17 @@ export async function applyMultiFilter(
   for (const value of values) {
     await page.getByRole("listbox").getByText(value, { exact: true }).first().click();
   }
-  await page.getByTestId(`${testId}-apply`).click();
+  await page.getByTestId(`${testId}-done`).click();
+}
+
+/** Selects options and commits them via the single global Apply Filters. */
+export async function applyMultiFilter(
+  page: Page,
+  testId: string,
+  values: string[],
+): Promise<void> {
+  await selectFilterValues(page, testId, values);
+  await page.getByTestId("apply-filters").click();
 }
 
 /** Runs the full import wizard with the synthetic fixture. */

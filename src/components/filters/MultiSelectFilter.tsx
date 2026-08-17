@@ -6,9 +6,12 @@ import { Input } from "../ui/primitives";
 
 /**
  * Checkbox multi-select popover used by every categorical filter (Period,
- * Team, Employee, Category, Activity). Selections are drafted inside the
- * popover and committed with Apply; values within one filter combine with OR,
- * different filters combine with AND (enforced by the core filter engine).
+ * Team, Employee, Category, Activity). Selections edit the shared DRAFT
+ * filter state owned by the filter bar — nothing recalculates until the
+ * single global "Apply Filters" action commits all dimensions together.
+ * Values within one filter combine with OR, different filters with AND
+ * (enforced centrally by the core filter engine). Search is
+ * case-insensitive over label, sublabel and keywords.
  */
 
 export interface MultiSelectOption {
@@ -25,7 +28,7 @@ export function MultiSelectFilter({
   label,
   options,
   selected,
-  onApply,
+  onChange,
   searchable = false,
   searchPlaceholder = "Search…",
   testId,
@@ -33,21 +36,14 @@ export function MultiSelectFilter({
   label: string;
   options: MultiSelectOption[];
   selected: string[];
-  onApply: (values: string[]) => void;
+  onChange: (values: string[]) => void;
   searchable?: boolean;
   searchPlaceholder?: string;
   testId: string;
 }) {
   const [open, setOpen] = React.useState(false);
-  const [draft, setDraft] = React.useState<string[]>(selected);
   const [search, setSearch] = React.useState("");
   const rootRef = React.useRef<HTMLDivElement>(null);
-
-  const openPopover = () => {
-    setDraft(selected);
-    setSearch("");
-    setOpen(true);
-  };
 
   React.useEffect(() => {
     if (!open) return;
@@ -74,12 +70,11 @@ export function MultiSelectFilter({
   }, [options, search]);
 
   const toggle = (value: string) =>
-    setDraft((d) => (d.includes(value) ? d.filter((v) => v !== value) : [...d, value]));
-
-  const apply = () => {
-    onApply(draft);
-    setOpen(false);
-  };
+    onChange(
+      selected.includes(value)
+        ? selected.filter((v) => v !== value)
+        : [...selected, value],
+    );
 
   const plural = label.toLowerCase().endsWith("y")
     ? `${label.toLowerCase().slice(0, -1)}ies`
@@ -99,7 +94,10 @@ export function MultiSelectFilter({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label={label}
-        onClick={() => (open ? setOpen(false) : openPopover())}
+        onClick={() => {
+          setSearch("");
+          setOpen((v) => !v);
+        }}
         className={`flex h-8 max-w-64 items-center gap-1.5 rounded-md border px-2.5 text-sm cursor-pointer focus:outline-2 focus:outline-accent/50 ${
           selected.length > 0
             ? "border-accent/50 bg-accent-soft/40 text-accent-deep font-medium"
@@ -132,7 +130,7 @@ export function MultiSelectFilter({
               <li className="px-2 py-4 text-center text-xs text-muted">No matches</li>
             ) : (
               filtered.map((o) => {
-                const isSelected = draft.includes(o.value);
+                const isSelected = selected.includes(o.value);
                 return (
                   <li key={o.value} role="option" aria-selected={isSelected}>
                     <button
@@ -168,14 +166,16 @@ export function MultiSelectFilter({
             <div className="flex gap-1">
               <button
                 type="button"
-                onClick={() => setDraft([...new Set([...draft, ...filtered.map((o) => o.value)])])}
+                onClick={() =>
+                  onChange([...new Set([...selected, ...filtered.map((o) => o.value)])])
+                }
                 className="rounded px-2 py-1 text-xs font-medium text-ink-2 hover:bg-page cursor-pointer"
               >
                 Select all
               </button>
               <button
                 type="button"
-                onClick={() => setDraft([])}
+                onClick={() => onChange([])}
                 className="rounded px-2 py-1 text-xs font-medium text-ink-2 hover:bg-page cursor-pointer"
               >
                 Clear
@@ -183,11 +183,11 @@ export function MultiSelectFilter({
             </div>
             <button
               type="button"
-              onClick={apply}
-              data-testid={`${testId}-apply`}
-              className="rounded-md bg-accent px-3 py-1 text-xs font-medium text-white hover:bg-accent-deep cursor-pointer"
+              onClick={() => setOpen(false)}
+              data-testid={`${testId}-done`}
+              className="rounded-md bg-page px-3 py-1 text-xs font-medium text-ink border border-hairline hover:bg-grid/50 cursor-pointer"
             >
-              Apply
+              Done
             </button>
           </div>
         </div>

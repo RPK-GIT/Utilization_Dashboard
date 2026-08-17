@@ -8,6 +8,7 @@ import {
   ensureFixture,
   importFixture,
   resetApp,
+  selectFilterValues,
 } from "./helpers";
 
 /**
@@ -43,13 +44,23 @@ test("generates a self-contained executive snapshot that works offline", async (
   await configureFixtureTeam(page);
   await importFixture(page);
 
-  // Apply a filter so "current view" state is captured.
+  // Apply a filter, then make a DRAFT-only change that must NOT be captured.
   await applyMultiFilter(page, "filter-team", ["IP Delivery Team"]);
+  await selectFilterValues(page, "filter-team", ["Development Team"]); // draft only
 
+  // Single clear action in a centered modal that summarizes the APPLIED state.
   await page.getByTestId("generate-snapshot").click();
+  await expect(page.getByTestId("snapshot-filter-summary")).toContainText(
+    "Team: IP Delivery Team",
+  );
+  await expect(page.getByTestId("snapshot-filter-summary")).not.toContainText(
+    "Development Team",
+  );
   const downloadPromise = page.waitForEvent("download");
-  await page.getByTestId("snapshot-current-view").click();
+  await page.getByTestId("generate-snapshot-confirm").click();
   const download = await downloadPromise;
+  await expect(page.getByTestId("snapshot-success")).toBeVisible();
+  await page.getByTestId("snapshot-close").click();
   expect(download.suggestedFilename()).toBe(
     "Utilization_Executive_Snapshot_July_2026.html",
   );
@@ -104,7 +115,7 @@ test("generates a self-contained executive snapshot that works offline", async (
   // Multi-select works in the snapshot: both teams selected → full scope.
   await applyMultiFilter(snap, "filter-team", ["Development Team"]);
   await expect(snap.getByTestId("kpi-total_hours")).toHaveText("86.5");
-  await snap.getByRole("button", { name: "Clear filters" }).click();
+  await snap.getByTestId("clear-filters").click();
 
   // Activity multi-select (description-first, search by code).
   await snap.getByTestId("filter-activity").click();
@@ -113,9 +124,10 @@ test("generates a self-contained executive snapshot that works offline", async (
     .getByRole("listbox")
     .getByText("Digital Time entry Cockpit Simplified")
     .click();
-  await snap.getByTestId("filter-activity-apply").click();
+  await snap.getByTestId("filter-activity-done").click();
+  await snap.getByTestId("apply-filters").click();
   await expect(snap.getByTestId("kpi-total_hours")).toHaveText("14");
-  await snap.getByRole("button", { name: "Clear filters" }).click();
+  await snap.getByTestId("clear-filters").click();
 
   // Date labels and validation behave identically in the snapshot.
   await expect(snap.getByText("From Date", { exact: true })).toBeVisible();
@@ -123,11 +135,11 @@ test("generates a self-contained executive snapshot that works offline", async (
   await snap.getByTestId("from-date").fill("2026-07-20");
   await snap.getByTestId("to-date").fill("2026-07-10");
   await expect(snap.getByTestId("date-error")).toBeVisible();
-  await expect(snap.getByTestId("apply-dates")).toBeDisabled();
+  await expect(snap.getByTestId("apply-filters")).toBeDisabled();
   await snap.getByTestId("from-date").fill("2026-07-06");
-  await snap.getByTestId("apply-dates").click();
+  await snap.getByTestId("apply-filters").click();
   await expect(snap.getByTestId("kpi-total_hours")).toHaveText("40");
-  await snap.getByRole("button", { name: "Clear filters" }).click();
+  await snap.getByTestId("clear-filters").click();
 
   // Navigation works (hash routing on file://) — back/forward included.
   await snap.locator("[data-nav=team]").click();
@@ -177,8 +189,10 @@ test("snapshot is frozen — later data changes do not affect the saved file", a
 
   await page.getByTestId("generate-snapshot").click();
   const downloadPromise = page.waitForEvent("download");
-  await page.getByTestId("snapshot-full").click();
+  await page.getByTestId("generate-snapshot-confirm").click();
   const download = await downloadPromise;
+  await expect(page.getByTestId("snapshot-success")).toBeVisible();
+  await page.getByTestId("snapshot-close").click();
   const artifactDir = path.join(__dirname, ".artifacts");
   mkdirSync(artifactDir, { recursive: true });
   const file = path.join(artifactDir, "frozen-check.html");

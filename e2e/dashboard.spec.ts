@@ -5,6 +5,7 @@ import {
   ensureFixture,
   importFixture,
   resetApp,
+  selectFilterValues,
 } from "./helpers";
 
 /**
@@ -44,33 +45,54 @@ test("imports the monthly excel, computes KPIs, filters and drills down", async 
   // Selecting BOTH teams includes both (OR within a dimension).
   await applyMultiFilter(page, "filter-team", ["Development Team"]);
   await expect(page.getByTestId("kpi-total_hours")).toHaveText("86.5");
-  await page.getByRole("button", { name: "Clear filters" }).click();
+  await page.getByTestId("clear-filters").click();
 
-  // Activity filter is description-first and searches description AND code.
+  // Draft selections do NOT recalculate anything until Apply Filters.
+  await selectFilterValues(page, "filter-team", ["IP Delivery Team"]);
+  await expect(page.getByTestId("unapplied-hint")).toBeVisible();
+  await expect(page.getByTestId("kpi-total_hours")).toHaveText("86.5");
+  await page.getByTestId("apply-filters").click();
+  await expect(page.getByTestId("kpi-total_hours")).toHaveText("42");
+  await page.getByTestId("clear-filters").click();
+
+  // Activity filter is description-first and searches description AND code
+  // (case-insensitively).
   await page.getByTestId("filter-activity").click();
-  await page.getByTestId("filter-activity-search").fill("Digital Time");
+  await page.getByTestId("filter-activity-search").fill("digital time");
   await expect(
     page.getByRole("listbox").getByText("Digital Time entry Cockpit Simplified"),
   ).toBeVisible();
-  await page.getByTestId("filter-activity-search").fill("DTEC");
+  await page.getByTestId("filter-activity-search").fill("dtec");
   await page
     .getByRole("listbox")
     .getByText("Digital Time entry Cockpit Simplified")
     .click();
-  await page.getByTestId("filter-activity-apply").click();
+  await page.getByTestId("filter-activity-done").click();
+  await page.getByTestId("apply-filters").click();
   await expect(page.getByTestId("kpi-total_hours")).toHaveText("14");
   await expect(page.getByTestId("kpi-ip_hours")).toHaveText("14");
   await expect(page.getByTestId("filter-chips")).toContainText(
     "Activity: Digital Time entry Cockpit Simplified (DTEC)",
   );
-  await page.getByRole("button", { name: "Clear filters" }).click();
+  await page.getByTestId("clear-filters").click();
+
+  // ONE Apply commits several dimensions together: employees + category.
+  await selectFilterValues(page, "filter-employee", [
+    "Ivy Ipdelivery",
+    "Devon Developer",
+  ]);
+  await selectFilterValues(page, "filter-category", ["IP"]);
+  await page.getByTestId("apply-filters").click();
+  // (Ivy OR Devon) AND category IP: DTEC 6 (Ivy) + PCSI 6 (Devon) = 12.
+  await expect(page.getByTestId("kpi-total_hours")).toHaveText("12");
+  await page.getByTestId("clear-filters").click();
 
   // Multi-select employees: Ivy (22h) + Devon (30h) = 52.
   await applyMultiFilter(page, "filter-employee", ["Ivy Ipdelivery", "Devon Developer"]);
   await expect(page.getByTestId("kpi-total_hours")).toHaveText("52");
-  await page.getByRole("button", { name: "Clear filters" }).click();
+  await page.getByTestId("clear-filters").click();
 
-  // Explicit date labels; invalid range blocks Apply immediately.
+  // Explicit date labels; invalid range blocks the global Apply immediately.
   await expect(page.getByText("From Date", { exact: true })).toBeVisible();
   await expect(page.getByText("To Date", { exact: true })).toBeVisible();
   await page.getByTestId("from-date").fill("2026-07-20");
@@ -78,16 +100,15 @@ test("imports the monthly excel, computes KPIs, filters and drills down", async 
   await expect(page.getByTestId("date-error")).toContainText(
     "To Date cannot be earlier than From Date",
   );
-  await expect(page.getByTestId("apply-dates")).toBeDisabled();
+  await expect(page.getByTestId("apply-filters")).toBeDisabled();
   // Correcting the range enables Apply; rows 6–10 Jul = 8+8+8+6+4+6 = 40.
-  await page.getByTestId("to-date").fill("2026-07-10");
   await page.getByTestId("from-date").fill("2026-07-06");
   await expect(page.getByTestId("date-error")).toHaveCount(0);
-  await page.getByTestId("apply-dates").click();
+  await page.getByTestId("apply-filters").click();
   await expect(page.getByTestId("kpi-total_hours")).toHaveText("40");
   await expect(page.getByTestId("filter-chips")).toContainText("From Date: 2026-07-06");
   await expect(page.getByTestId("filter-chips")).toContainText("To Date: 2026-07-10");
-  await page.getByRole("button", { name: "Clear filters" }).click();
+  await page.getByTestId("clear-filters").click();
 
   // Total Hours KPI navigates to a routed detail with Back.
   await page.getByTestId("kpi-card-total_hours").click();
@@ -126,7 +147,7 @@ test("imports the monthly excel, computes KPIs, filters and drills down", async 
   await page.getByTestId("detail-back").click();
   await expect(page.getByTestId("team-table")).toBeVisible();
   await expect(page.getByTestId("filter-chips")).toContainText("Team: IP Delivery Team");
-  await page.getByRole("button", { name: "Clear filters" }).click();
+  await page.getByTestId("clear-filters").click();
 
   // Activity analysis table is description-first and drills into detail.
   await page.locator("[data-nav=ip-accelerators]").click();

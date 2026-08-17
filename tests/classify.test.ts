@@ -97,6 +97,27 @@ describe("development code extraction", () => {
     expect(upper.definition?.code).toBe("MSLM");
   });
 
+  it("matches every casing variant to the same configured code", () => {
+    // Mixed-case forms observed in the real monthly export (e.g. IDLE/idle).
+    for (const text of ["MSLM x", "mslm x", "Mslm x", "mSlM x"]) {
+      expect(extractCode(text, config.codes).definition?.code).toBe("MSLM");
+    }
+    for (const text of ["IDLE time", "idle time", "Idle time"]) {
+      expect(extractCode(text, config.codes).definition?.code).toBe("IDLE");
+    }
+    for (const text of ["dtec Something", "DTEC Something", "Dtec Something"]) {
+      expect(extractCode(text, config.codes).definition?.code).toBe("DTEC");
+    }
+  });
+
+  it("matches even when the CONFIGURED code was stored in lower case", () => {
+    const codes = config.codes.map((c) =>
+      c.code === "MSLM" ? { ...c, code: "mslm" } : c,
+    );
+    const result = extractCode("MSLM shelf life", codes);
+    expect(result.definition?.description).toBe("Material Shelf Life Management");
+  });
+
   it("matches shorter configured codes followed by a delimiter (2PC:)", () => {
     const result = extractCode("2PC: Partner Co-Pilot", config.codes);
     expect(result.definition?.code).toBe("2PC");

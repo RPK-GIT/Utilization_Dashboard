@@ -193,7 +193,8 @@ function CodeMasterEditor({
   const addCode = () => {
     const code = newCode.code.trim().toUpperCase();
     if (!code || !newCode.description.trim()) return;
-    if (draft.codes.some((c) => c.code === code)) return;
+    // Codes are case-insensitive: "mslm" and "MSLM" are the same code.
+    if (draft.codes.some((c) => c.code.toUpperCase() === code)) return;
     update((c) => ({
       ...c,
       codes: [

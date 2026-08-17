@@ -35,7 +35,11 @@ export function buildSnapshotPayload(args: {
   const rows = allRows;
 
   const periods = [...new Set(datasets.map((d) => d.period))].sort();
-  const labels = periods.map((p) => periodLabel(p));
+  // The headline period reflects the applied period filter when one exists.
+  const scopedPeriods = effectiveFilters.periods.length
+    ? [...effectiveFilters.periods].sort()
+    : periods;
+  const labels = scopedPeriods.map((p) => periodLabel(p));
   const scopedRows = applyFilters(rows, effectiveFilters);
   const dates = scopedRows
     .map((r) => r.date)
@@ -49,7 +53,10 @@ export function buildSnapshotPayload(args: {
     subtitle: "Executive Snapshot",
     periodLabel: labels.join(", "),
     generatedAt,
-    dataThrough: dates.length > 0 ? dates[dates.length - 1] : (periods[periods.length - 1] ?? ""),
+    dataThrough:
+      dates.length > 0
+        ? dates[dates.length - 1]
+        : (scopedPeriods[scopedPeriods.length - 1] ?? ""),
     configVersion: configVersions.join(", "),
     scope,
     rows,

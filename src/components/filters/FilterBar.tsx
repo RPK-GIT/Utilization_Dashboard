@@ -1,25 +1,30 @@
 "use client";
 
 import * as React from "react";
-import { FilterX } from "lucide-react";
+import { FilterX, SlidersHorizontal } from "lucide-react";
 import { useDashboard } from "../DashboardContext";
-import { Button, Chip } from "../ui/primitives";
+import { Chip } from "../ui/primitives";
 import { MultiSelectFilter, type MultiSelectOption } from "./MultiSelectFilter";
 import { DateRangeFilter } from "./DateRangeFilter";
-import { clearFilters, hasActiveFilters } from "@/core/filters/engine";
+import {
+  clearFilters,
+  hasActiveFilters,
+  validateDateRange,
+} from "@/core/filters/engine";
 import { activityLabel, periodLabel } from "@/core/format";
 import type { FilterState } from "@/core/types";
 
 /**
- * Executive filter bar — one row above everything it scopes. Every filter is
- * a checkbox multi-select (values within one filter OR together; different
- * filters AND together); the date range is explicitly labeled and validated.
- * Active selections render as chips, summarized when a dimension has many
- * values.
+ * Executive filter bar with a strict DRAFT vs APPLIED separation:
+ * checkboxes and date inputs edit the draft; the single "Apply Filters"
+ * action validates and commits every dimension together to the central
+ * applied state (which drives all KPIs, charts, tables, drilldowns and
+ * snapshots). "Clear All" resets the applied state. Values within one
+ * filter OR together; different filters AND together.
  */
 
 interface ChipGroup {
-  key: keyof FilterState;
+  key: "periods" | "teams" | "employees" | "categories" | "codes";
   label: string;
   values: string[];
   display: (value: string) => string;
@@ -27,6 +32,15 @@ interface ChipGroup {
 
 export function FilterBar() {
   const { rows, filters, setFilters, availablePeriods, config } = useDashboard();
+
+  // Draft state, re-seeded whenever the applied state changes externally
+  // (chip removal, Clear All) — state adjustment during render.
+  const [draft, setDraft] = React.useState<FilterState>(filters);
+  const [seenApplied, setSeenApplied] = React.useState(filters);
+  if (seenApplied !== filters) {
+    setSeenApplied(filters);
+    setDraft(filters);
+  }
 
   const employees = React.useMemo(
     () => [...new Set(rows.map((r) => r.employee).filter(Boolean))].sort(),
@@ -44,7 +58,7 @@ export function FilterBar() {
   }, [rows]);
 
   // Activity options: codes present in the data, described from configuration
-  // (description first, code secondary — searchable by either).
+  // (description first, code secondary — search matches either, any case).
   const activityOptions = React.useMemo<MultiSelectOption[]>(() => {
     const codesInData = [
       ...new Set(rows.map((r) => r.developmentCode).filter((c): c is string => !!c)),
@@ -76,11 +90,23 @@ export function FilterBar() {
     [config.codes],
   );
 
-  const active = hasActiveFilters(filters);
+  const dateValidation = validateDateRange(draft.dateFrom, draft.dateTo);
+  const dirty = JSON.stringify(draft) !== JSON.stringify(filters);
+  const appliedActive = hasActiveFilters(filters);
+
   const setList =
-    (key: "periods" | "teams" | "employees" | "categories" | "codes") =>
+    (key: ChipGroup["key"]) =>
     (values: string[]) =>
-      setFilters({ ...filters, [key]: values });
+      setDraft((d) => ({ ...d, [key]: values }));
+
+  const appliedCount =
+    (filters.periods.length ? 1 : 0) +
+    (filters.teams.length ? 1 : 0) +
+    (filters.employees.length ? 1 : 0) +
+    (filters.categories.length ? 1 : 0) +
+    (filters.codes.length ? 1 : 0) +
+    (filters.dateFrom || filters.dateTo ? 1 : 0) +
+    (filters.search.trim() ? 1 : 0);
 
   const chipGroups: ChipGroup[] = [
     { key: "periods", label: "Period", values: filters.periods, display: periodLabel },
@@ -97,15 +123,15 @@ export function FilterBar() {
           label="Period"
           testId="filter-period"
           options={availablePeriods.map((p) => ({ value: p.period, label: p.label }))}
-          selected={filters.periods}
-          onApply={setList("periods")}
+          selected={draft.periods}
+          onChange={setList("periods")}
         />
         <MultiSelectFilter
           label="Team"
           testId="filter-team"
           options={teams.map((t) => ({ value: t, label: t }))}
-          selected={filters.teams}
-          onApply={setList("teams")}
+          selected={draft.teams}
+          onChange={setList("teams")}
         />
         <MultiSelectFilter
           label="Employee"
@@ -113,15 +139,15 @@ export function FilterBar() {
           searchable
           searchPlaceholder="Search employees…"
           options={employees.map((e) => ({ value: e, label: e }))}
-          selected={filters.employees}
-          onApply={setList("employees")}
+          selected={draft.employees}
+          onChange={setList("employees")}
         />
         <MultiSelectFilter
           label="Category"
           testId="filter-category"
           options={categories.map((c) => ({ value: c, label: c }))}
-          selected={filters.categories}
-          onApply={setList("categories")}
+          selected={draft.categories}
+          onChange={setList("categories")}
         />
         <MultiSelectFilter
           label="Activity"
@@ -129,24 +155,46 @@ export function FilterBar() {
           searchable
           searchPlaceholder="Search description, code or category…"
           options={activityOptions}
-          selected={filters.codes}
-          onApply={setList("codes")}
+          selected={draft.codes}
+          onChange={setList("codes")}
         />
         <DateRangeFilter
-          from={filters.dateFrom}
-          to={filters.dateTo}
-          onApply={(dateFrom, dateTo) => setFilters({ ...filters, dateFrom, dateTo })}
+          from={draft.dateFrom}
+          to={draft.dateTo}
+          onChange={(dateFrom, dateTo) => setDraft((d) => ({ ...d, dateFrom, dateTo }))}
         />
-        {active ? (
-          <Button variant="ghost" onClick={() => setFilters(clearFilters())}>
+        <button
+          type="button"
+          data-testid="apply-filters"
+          disabled={!dateValidation.ok || !dirty}
+          onClick={() => setFilters(draft)}
+          className="inline-flex h-8 items-center gap-1.5 rounded-md bg-accent px-3 text-sm font-medium text-white hover:bg-accent-deep disabled:opacity-45 disabled:pointer-events-none cursor-pointer"
+        >
+          <SlidersHorizontal className="h-3.5 w-3.5" />
+          Apply Filters
+        </button>
+        {appliedActive || dirty ? (
+          <button
+            type="button"
+            data-testid="clear-filters"
+            onClick={() => setFilters(clearFilters())}
+            className="inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-sm font-medium text-ink-2 hover:bg-page cursor-pointer"
+          >
             <FilterX className="h-3.5 w-3.5" />
-            Clear filters
-          </Button>
+            Clear All
+          </button>
+        ) : null}
+        {dirty && dateValidation.ok ? (
+          <span className="text-xs font-medium text-accent-deep" data-testid="unapplied-hint">
+            Unapplied changes — click Apply Filters
+          </span>
         ) : null}
       </div>
-      {active ? (
+      {appliedActive ? (
         <div className="flex flex-wrap items-center gap-1.5" data-testid="filter-chips">
-          <span className="text-xs font-medium text-muted">Filtered:</span>
+          <span className="text-xs font-medium text-muted">
+            {appliedCount} filter{appliedCount === 1 ? "" : "s"} applied:
+          </span>
           {chipGroups.map((group) => {
             if (group.values.length === 0) return null;
             // Few values: individual removable chips. Many: one summary chip.
@@ -165,10 +213,7 @@ export function FilterBar() {
               ));
             }
             return (
-              <span
-                key={group.key}
-                title={group.values.map(group.display).join(", ")}
-              >
+              <span key={group.key} title={group.values.map(group.display).join(", ")}>
                 <Chip
                   label={`${group.label}: ${group.values.length} selected`}
                   onRemove={() => setFilters({ ...filters, [group.key]: [] })}

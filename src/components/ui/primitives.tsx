@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 
 /**
@@ -238,7 +239,10 @@ export function Dialog({
   }, [open, onClose]);
 
   if (!open) return null;
-  return (
+  // Portal to <body>: a fixed-position overlay inside the sticky header would
+  // be trapped by its backdrop-filter containing block and render as a narrow
+  // strip instead of a centered viewport modal.
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-ink/30 p-4 pt-[6vh]"
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
@@ -268,7 +272,8 @@ export function Dialog({
         </div>
         <div className="max-h-[75vh] overflow-y-auto px-5 py-4">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

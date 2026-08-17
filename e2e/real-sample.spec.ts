@@ -49,7 +49,7 @@ test("dashboard reproduces independently computed KPIs from the real export", as
   await expect(page.getByTestId("kpi-total_hours")).toHaveText("737.5");
   await expect(page.getByTestId("kpi-billable_hours")).toHaveText("384");
   await expect(page.getByTestId("kpi-billable_percentage")).toHaveText("52.1%");
-  await page.getByRole("button", { name: "Clear filters" }).click();
+  await page.getByTestId("clear-filters").click();
 
   // Data quality shows the 0085I unclassified rows (28) and unknown codes.
   await page.locator("[data-nav=quality]").click();
