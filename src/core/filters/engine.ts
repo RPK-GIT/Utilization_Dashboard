@@ -60,10 +60,14 @@ export interface FilterChip {
   value: string;
 }
 
-/** Active filters rendered as removable chips. */
+/**
+ * Active filters rendered as removable chips. Codes are business-facing, so
+ * the caller supplies a resolver mapping code → "Description (CODE)".
+ */
 export function filterChips(
   filters: FilterState,
   periodLabel: (period: string) => string,
+  codeLabel: (code: string) => string = (c) => c,
 ): FilterChip[] {
   const chips: FilterChip[] = [];
   for (const p of filters.periods)
@@ -75,7 +79,7 @@ export function filterChips(
   for (const c of filters.categories)
     chips.push({ kind: "categories", label: `Category: ${c}`, value: c });
   for (const c of filters.codes)
-    chips.push({ kind: "codes", label: `Code: ${c}`, value: c });
+    chips.push({ kind: "codes", label: `Activity: ${codeLabel(c)}`, value: c });
   if (filters.dateFrom)
     chips.push({ kind: "dateFrom", label: `From: ${filters.dateFrom}`, value: filters.dateFrom });
   if (filters.dateTo)

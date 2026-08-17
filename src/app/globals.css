@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* Scan the whole src tree for class usage. The snapshot viewer's Vite build
+   roots at src/snapshot, so without this Tailwind would only auto-detect
+   sources under that subtree and miss every component class. */
+@source "../";
+
 /*
  * Design tokens — light executive theme.
  * Chart chrome and series colors follow the validated reference palette:

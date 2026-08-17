@@ -36,8 +36,14 @@ review the validation summary, confirm — the dashboard is live.
    with, plus a frozen copy of that configuration.
 4. **Analyze** — Overview, Team Utilization, IP & Accelerators, Activities,
    Detailed Analysis, Data Quality. All KPIs, charts, tables and drilldowns
-   respond to the shared filter bar (period, team, employee, category, code,
-   date range) with active filters shown as chips.
+   respond to the shared filter bar (period, team, employee, category,
+   activity, date range) with active filters shown as chips. Activities are
+   always **description-first** — "Digital Time entry Cockpit Simplified
+   (DTEC)" — and the activity filter is a searchable multi-select matching
+   description, code and category alike. Every meaningful chart, table row
+   and KPI card navigates to a routed detail page (`#/detail/…`) showing the
+   actual source records, with a ← Back button and working browser
+   back/forward; filter state survives navigation.
 5. **Generate Executive Snapshot** — see below.
 
 ## Executive snapshots
@@ -48,11 +54,16 @@ Click **Generate Executive Snapshot** and choose:
 - **Entire dashboard** — unfiltered.
 
 The download (e.g. `Utilization_Executive_Snapshot_July_2026.html`) is one
-self-contained HTML file: data, charts, styling and interaction are embedded.
-Senior management just opens it — no upload, server, login or network. The
-snapshot is frozen at generation time; later changes to data or configuration
-do not affect it. The snapshot bundle physically excludes admin, import,
-dataset and configuration components (verified by E2E test).
+self-contained HTML file: data, charts, styling and interaction are embedded —
+no `fetch()` for local data, no external scripts or stylesheets, no `/_next/`
+or localhost references. Every artifact is validated for exactly these
+properties before it is offered for download; a failing artifact is never
+presented as generated. Senior management just opens it from disk (`file://`)
+— no upload, server, login or network. Navigation, filters, chart drilldowns
+into actual records and Back buttons all work inside the file. The snapshot is
+frozen at generation time; later changes to data or configuration do not
+affect it. The snapshot bundle physically excludes admin, import, dataset and
+configuration components (all verified by the Playwright snapshot test).
 
 ## Configuration & versioning
 

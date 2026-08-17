@@ -82,6 +82,46 @@ export function injectPayload(template: string, payload: SnapshotPayload): strin
   );
 }
 
+export interface SnapshotValidation {
+  ok: boolean;
+  problems: string[];
+}
+
+/**
+ * Validates a generated snapshot BEFORE it is offered for download: data,
+ * CSS and JavaScript must be embedded, and no backend/localhost/external
+ * runtime references may remain. A failing snapshot must not be presented
+ * as successfully generated.
+ */
+export function validateSnapshotHtml(html: string): SnapshotValidation {
+  const problems: string[] = [];
+
+  if (!html.includes('<script id="snapshot-data" type="application/json">{')) {
+    problems.push("Dashboard data is not embedded in the file.");
+  }
+  if (!/<style[\s>]/.test(html)) {
+    problems.push("CSS is not embedded in the file.");
+  }
+  const moduleTag = html.match(/<script type="module"[^>]*>/);
+  if (!moduleTag || /\ssrc=/i.test(moduleTag[0])) {
+    problems.push("The JavaScript bundle is not inlined in the file.");
+  }
+  if (/<script[^>]*\ssrc=/i.test(html)) {
+    problems.push("The file references an external script (script src=…).");
+  }
+  if (/<link[^>]*\srel=["']stylesheet["'][^>]*\shref=/i.test(html)) {
+    problems.push("The file references an external stylesheet.");
+  }
+  if (html.includes("/_next/")) {
+    problems.push("The file references Next.js runtime assets (/_next/…).");
+  }
+  if (/https?:\/\/localhost|https?:\/\/127\.0\.0\.1/.test(html)) {
+    problems.push("The file references a localhost URL.");
+  }
+
+  return { ok: problems.length === 0, problems };
+}
+
 export function snapshotFileName(payload: SnapshotPayload): string {
   const period = payload.periodLabel.replace(/[^A-Za-z0-9]+/g, "_") || "AllPeriods";
   return `Utilization_Executive_Snapshot_${period}.html`;

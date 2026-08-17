@@ -7,14 +7,13 @@ import { Card, CardHeader } from "../ui/primitives";
 import { DataTable } from "../tables/DataTable";
 import { EChart } from "../charts/EChart";
 import { horizontalBars } from "../charts/builders";
-import { EmployeeDrilldown } from "../drill/Drilldowns";
+import { goDetail } from "../navigation";
 import { summarizeEmployees, type EmployeeSummary } from "@/core/metrics/engine";
 import { formatHours, formatPercent } from "@/core/format";
 
 /** Team utilization: sortable per-employee table with drilldown + visual ranking. */
 export function TeamView() {
   const { filtered } = useDashboard();
-  const [employee, setEmployee] = React.useState<string | null>(null);
   const summaries = React.useMemo(() => summarizeEmployees(filtered), [filtered]);
 
   const columns = React.useMemo<ColumnDef<EmployeeSummary, any>[]>(
@@ -89,7 +88,7 @@ export function TeamView() {
           <EChart
             option={horizontalBars(ranking, { format: "percent" })}
             height={Math.max(180, ranking.length * 26 + 60)}
-            onClick={(p) => p.name && setEmployee(p.name)}
+            onClick={(p) => p.name && goDetail("employee", p.name)}
             ariaLabel="Billable percentage ranking by employee"
           />
         </div>
@@ -104,13 +103,12 @@ export function TeamView() {
             data={summaries}
             columns={columns}
             searchPlaceholder="Search employee or team…"
-            onRowClick={(row) => setEmployee(row.employee)}
+            onRowClick={(row) => goDetail("employee", row.employee)}
             csvName="team_utilization.csv"
             testId="team-table"
           />
         </div>
       </Card>
-      <EmployeeDrilldown employee={employee} onClose={() => setEmployee(null)} />
     </div>
   );
 }

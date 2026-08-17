@@ -29,6 +29,12 @@ function fmt(value: number, format: ValueFormat): string {
 export interface NamedValue {
   name: string;
   value: number;
+  /** Secondary line for the tooltip (e.g. the technical code + category). */
+  detail?: string;
+}
+
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 /** Horizontal bar chart — one measure over nominal categories, single hue. */
@@ -42,8 +48,13 @@ export function horizontalBars(
     tooltip: {
       trigger: "item",
       ...TOOLTIP_STYLE,
-      formatter: (p: { name: string; value: number }) =>
-        `<strong>${fmt(p.value, format)}</strong>&nbsp;&nbsp;<span style="color:${INK_2}">${p.name}</span>`,
+      formatter: (p: { name: string; value: number; dataIndex: number }) => {
+        const item = reversed[p.dataIndex];
+        const detail = item?.detail
+          ? `<br/><span style="color:${INK_2};font-size:11px">${escapeHtml(item.detail)}</span>`
+          : "";
+        return `<strong>${fmt(p.value, format)}</strong>&nbsp;&nbsp;<span style="color:${INK_2}">${escapeHtml(p.name)}</span>${detail}`;
+      },
     },
     grid: { left: 8, right: 56, top: 8, bottom: 8, containLabel: true },
     xAxis: {

@@ -5,17 +5,17 @@ import { useDashboard } from "../DashboardContext";
 import { Card, CardHeader } from "../ui/primitives";
 import { EChart } from "../charts/EChart";
 import { horizontalBars } from "../charts/builders";
-import { TransactionsTable } from "../tables/TransactionsTable";
-import { groupHours } from "@/core/metrics/aggregate";
+import { goDetail } from "../navigation";
+import { groupHours, summarizeCodes } from "@/core/metrics/aggregate";
 import { formatHours } from "@/core/format";
 
 /**
  * Activity analysis — where non-billable capacity goes (Learning, Leave,
- * meetings, idle, …). Clicking a category drills into its transactions.
+ * meetings, idle, …). Clicking a category opens the routed category detail
+ * with the actual underlying records.
  */
 export function ActivitiesView() {
   const { filtered, config } = useDashboard();
-  const [selected, setSelected] = React.useState<string | null>(null);
 
   const productive = React.useMemo(
     () => new Set(config.categories.filter((c) => c.productive).map((c) => c.name)),
@@ -30,9 +30,12 @@ export function ActivitiesView() {
       ),
     [filtered, productive],
   );
-  const selectedRows = React.useMemo(
-    () => filtered.filter((r) => r.developmentCategory === selected),
-    [filtered, selected],
+  const nonProductiveCodes = React.useMemo(
+    () =>
+      summarizeCodes(filtered)
+        .filter((c) => !productive.has(c.category))
+        .slice(0, 12),
+    [filtered, productive],
   );
   const total = buckets.reduce((a, b) => a + b.hours, 0);
 
@@ -41,7 +44,7 @@ export function ActivitiesView() {
       <Card>
         <CardHeader
           title="Non-productive activity distribution"
-          subtitle={`${formatHours(total)} hours outside billable, IP and accelerator work — click a bar for the underlying records`}
+          subtitle={`${formatHours(total)} hours outside billable, IP and accelerator work — click a bar for the category detail and its records`}
         />
         <div className="px-3 pb-3">
           <EChart
@@ -49,28 +52,35 @@ export function ActivitiesView() {
               buckets.map((b) => ({ name: b.key, value: b.hours })),
             )}
             height={Math.max(200, buckets.length * 30 + 60)}
-            onClick={(p) => p.name && setSelected(p.name)}
+            onClick={(p) => p.name && goDetail("category", p.name)}
             ariaLabel="Hours by non-productive activity category"
           />
         </div>
       </Card>
-      {selected ? (
-        <Card>
-          <CardHeader
-            title={`${selected} — transactions`}
-            subtitle={`${formatHours(
-              selectedRows.reduce((a, r) => a + r.hours, 0),
-            )} hours across ${selectedRows.length} records`}
+      <Card>
+        <CardHeader
+          title="Largest non-productive activities"
+          subtitle="Description-first; click a bar for the activity detail"
+        />
+        <div className="px-3 pb-3">
+          <EChart
+            option={horizontalBars(
+              nonProductiveCodes.map((c) => ({
+                name: c.description,
+                value: c.hours,
+                detail: `${c.code} · ${c.category}`,
+              })),
+              { labelWidth: 220 },
+            )}
+            height={Math.max(180, nonProductiveCodes.length * 30 + 60)}
+            onClick={(p) => {
+              const match = nonProductiveCodes.find((c) => c.description === p.name);
+              if (match) goDetail("code", match.code);
+            }}
+            ariaLabel="Hours by non-productive activity"
           />
-          <div className="px-5 pb-4">
-            <TransactionsTable rows={selectedRows} csvName={`${selected}_activity.csv`} />
-          </div>
-        </Card>
-      ) : (
-        <p className="text-xs text-muted">
-          Select a category above to inspect its underlying records.
-        </p>
-      )}
+        </div>
+      </Card>
     </div>
   );
 }

@@ -82,11 +82,13 @@ describe("filter engine", () => {
       periods: ["2026-07"],
     };
     expect(hasActiveFilters(filters)).toBe(true);
-    const chips = filterChips(filters, periodLabel);
+    const chips = filterChips(filters, periodLabel, (code) =>
+      code === "DTEC" ? "Digital Time entry Cockpit Simplified (DTEC)" : code,
+    );
     expect(chips.map((c) => c.label)).toEqual([
       "Period: July 2026",
       "Team: IP Delivery Team",
-      "Code: DTEC",
+      "Activity: Digital Time entry Cockpit Simplified (DTEC)",
     ]);
     const without = removeChip(filters, chips[1]);
     expect(without.teams).toEqual([]);

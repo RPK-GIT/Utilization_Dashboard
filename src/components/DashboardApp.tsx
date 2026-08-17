@@ -4,13 +4,17 @@ import * as React from "react";
 import type { LucideIcon } from "lucide-react";
 import { useDashboard } from "./DashboardContext";
 import { FilterBar } from "./filters/FilterBar";
+import { DetailPage } from "./detail/DetailPage";
+import { parseHash, type DetailRoute } from "./navigation";
 import { formatDate } from "@/core/format";
 
 /**
- * Mode-aware dashboard shell: sidebar navigation (hash-based so history and
- * deep links work in the interactive app AND in a file:// snapshot), filter
- * bar, and the active section. The section list is injected by the host —
+ * Mode-aware dashboard shell: sidebar navigation and detail routing are
+ * hash-based, so history/back/forward and deep links work in the interactive
+ * app AND in a file:// snapshot. The section list is injected by the host —
  * the executive snapshot bundle never even contains admin components.
+ * Filter state lives above the router, so navigating to a detail page and
+ * back never resets the user's filters.
  */
 
 export interface SectionDef {
@@ -24,28 +28,40 @@ export interface SectionDef {
   render: () => React.ReactNode;
 }
 
-function useHashSection(sections: SectionDef[]): [string, (id: string) => void] {
+interface RouteState {
+  sectionId: string;
+  detail: DetailRoute | null;
+}
+
+function useHashRoute(sections: SectionDef[]): RouteState {
   const fallback = sections[0]?.id ?? "overview";
-  const read = React.useCallback(() => {
-    if (typeof window === "undefined") return fallback;
-    const id = window.location.hash.replace(/^#\/?/, "");
-    return sections.some((s) => s.id === id) ? id : fallback;
+  const read = React.useCallback((): RouteState => {
+    if (typeof window === "undefined") return { sectionId: fallback, detail: null };
+    const route = parseHash(window.location.hash);
+    if (route.detail) return { sectionId: fallback, detail: route.detail };
+    const id =
+      route.section && sections.some((s) => s.id === route.section)
+        ? route.section
+        : fallback;
+    return { sectionId: id, detail: null };
   }, [sections, fallback]);
 
-  const [section, setSection] = React.useState(read);
+  const [state, setState] = React.useState(read);
 
   React.useEffect(() => {
-    const handler = () => setSection(read());
+    const handler = () =>
+      setState((prev) => {
+        const next = read();
+        // While a detail is open, keep the previously visited section so the
+        // sidebar highlight and the hidden mounted section stay stable.
+        return next.detail ? { sectionId: prev.sectionId, detail: next.detail } : next;
+      });
     window.addEventListener("hashchange", handler);
     handler();
     return () => window.removeEventListener("hashchange", handler);
   }, [read]);
 
-  const navigate = React.useCallback((id: string) => {
-    window.location.hash = `/${id}`;
-  }, []);
-
-  return [section, navigate];
+  return state;
 }
 
 export function DashboardApp({
@@ -60,8 +76,10 @@ export function DashboardApp({
     () => (mode === "snapshot" ? sections.filter((s) => !s.admin) : sections),
     [sections, mode],
   );
-  const [active, navigate] = useHashSection(visible);
-  const current = visible.find((s) => s.id === active) ?? visible[0];
+  const { sectionId, detail } = useHashRoute(visible);
+  const current = visible.find((s) => s.id === sectionId) ?? visible[0];
+
+  const showFilters = detail ? true : !current?.hideFilters;
 
   return (
     <div className="flex min-h-screen">
@@ -76,12 +94,14 @@ export function DashboardApp({
         <nav className="flex-1 overflow-y-auto p-2" aria-label="Dashboard sections">
           {visible.map((s) => {
             const Icon = s.icon;
-            const isActive = current?.id === s.id;
+            const isActive = current?.id === s.id && !detail;
             return (
               <button
                 key={s.id}
                 type="button"
-                onClick={() => navigate(s.id)}
+                onClick={() => {
+                  window.location.hash = `/${s.id}`;
+                }}
                 aria-current={isActive ? "page" : undefined}
                 data-nav={s.id}
                 className={`mb-0.5 flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm font-medium transition-colors cursor-pointer max-lg:justify-center max-lg:px-0 ${
@@ -111,7 +131,9 @@ export function DashboardApp({
         <header className="sticky top-0 z-20 border-b border-grid bg-page/95 px-6 py-3 backdrop-blur">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h1 className="text-lg font-semibold text-ink">{current?.label}</h1>
+              <h1 className="text-lg font-semibold text-ink">
+                {detail ? "Detail" : current?.label}
+              </h1>
               {mode === "snapshot" ? (
                 <p className="text-xs text-muted">
                   {meta.periodLabel} · frozen point-in-time snapshot
@@ -120,13 +142,21 @@ export function DashboardApp({
             </div>
             <div className="flex items-center gap-2">{headerActions}</div>
           </div>
-          {!current?.hideFilters ? (
+          {showFilters ? (
             <div className="mt-3">
               <FilterBar />
             </div>
           ) : null}
         </header>
-        <main className="px-6 py-5">{current?.render()}</main>
+        <main className="px-6 py-5">
+          {/* The section stays mounted (hidden) beneath an open detail page so
+              Back restores the exact previous context — tabs, sort order and
+              pagination included. */}
+          <div className={detail ? "hidden" : undefined}>{current?.render()}</div>
+          {detail ? (
+            <DetailPage key={`${detail.kind}:${detail.value}`} route={detail} />
+          ) : null}
+        </main>
       </div>
     </div>
   );

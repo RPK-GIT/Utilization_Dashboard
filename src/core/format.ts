@@ -44,6 +44,20 @@ export function periodLabel(period: string): string {
   return month ? `${month} ${m[1]}` : period;
 }
 
+/**
+ * User-facing label for a development/activity code: the business description
+ * comes first, the technical code second — "Digital Time entry Cockpit
+ * Simplified (DTEC)". Unknown codes fall back to "Unknown code (XXXX)".
+ */
+export function activityLabel(
+  description: string | null | undefined,
+  code: string,
+): string {
+  const desc = description?.trim();
+  if (!desc || desc.toLowerCase() === "unknown code") return `Unknown code (${code})`;
+  return `${desc} (${code})`;
+}
+
 /** ISO date -> "17 Aug 2026". */
 export function formatDate(iso: string | null): string {
   if (!iso) return "—";

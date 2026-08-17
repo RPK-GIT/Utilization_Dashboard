@@ -8,6 +8,7 @@ import {
   buildSnapshotPayload,
   injectPayload,
   snapshotFileName,
+  validateSnapshotHtml,
 } from "@/core/snapshot/build";
 import { hasActiveFilters } from "@/core/filters/engine";
 
@@ -39,6 +40,18 @@ export function SnapshotButton() {
         generatedAt: new Date().toISOString(),
       });
       const html = injectPayload(template, payload);
+
+      // Validate the artifact BEFORE offering it: data/CSS/JS embedded, no
+      // backend, localhost or external runtime references. A failing snapshot
+      // is never presented as successfully generated.
+      const validation = validateSnapshotHtml(html);
+      if (!validation.ok) {
+        setError(
+          `The snapshot failed validation and was not generated: ${validation.problems.join(" ")}`,
+        );
+        return;
+      }
+
       const blob = new Blob([html], { type: "text/html" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");

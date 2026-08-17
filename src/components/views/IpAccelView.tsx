@@ -8,13 +8,20 @@ import { EChart } from "../charts/EChart";
 import { horizontalBars, trendLines } from "../charts/builders";
 import { ENTITY_COLORS } from "../charts/theme";
 import { DataTable } from "../tables/DataTable";
-import { CodeDrilldown } from "../drill/Drilldowns";
-import { summarizeCodes, groupHours, hoursByMonth, type CodeSummary } from "@/core/metrics/aggregate";
+import { goDetail } from "../navigation";
+import {
+  summarizeCodes,
+  groupHours,
+  hoursByMonth,
+  type CodeSummary,
+} from "@/core/metrics/aggregate";
 import { formatHours, formatPercent, periodLabel } from "@/core/format";
 
 /**
- * IP & Accelerator analysis plus the four-character code analysis table.
- * Chart series come entirely from configuration-mapped categories.
+ * IP & Accelerator analysis plus the activity/code analysis table. Labels
+ * are description-first with the technical code as secondary information —
+ * everything is derived from configuration-mapped categories. Charts and
+ * table rows navigate to the routed activity detail.
  */
 
 function SectionStat({ label, value }: { label: string; value: string }) {
@@ -34,7 +41,6 @@ function CategorySection({
   color: string;
 }) {
   const { filtered } = useDashboard();
-  const [code, setCode] = React.useState<string | null>(null);
 
   const rows = React.useMemo(
     () => filtered.filter((r) => r.developmentCategory === category),
@@ -52,6 +58,12 @@ function CategorySection({
   const months = React.useMemo(() => hoursByMonth(rows), [rows]);
   const total = rows.reduce((a, r) => a + r.hours, 0);
 
+  const codeBars = codes.slice(0, 10).map((c) => ({
+    name: c.description,
+    value: c.hours,
+    detail: `${c.code} · ${c.category}`,
+  }));
+
   return (
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -64,28 +76,25 @@ function CategorySection({
         <Card>
           <CardHeader
             title={`Top ${category === "IP" ? "IPs" : "accelerators"}`}
-            subtitle="Click a bar to drill down"
+            subtitle="Click a bar to open the activity detail"
           />
           <div className="px-3 pb-3">
             <EChart
-              option={horizontalBars(
-                codes.slice(0, 10).map((c) => ({
-                  name: `${c.code} · ${c.description}`,
-                  value: c.hours,
-                })),
-                { labelWidth: 220, color },
-              )}
-              height={Math.max(160, Math.min(codes.length, 10) * 32 + 60)}
+              option={horizontalBars(codeBars, { labelWidth: 220, color })}
+              height={Math.max(160, codeBars.length * 32 + 60)}
               onClick={(p) => {
-                const match = codes.find((c) => `${c.code} · ${c.description}` === p.name);
-                if (match) setCode(match.code);
+                const match = codes.find((c) => c.description === p.name);
+                if (match) goDetail("code", match.code);
               }}
-              ariaLabel={`Top ${category} codes by hours`}
+              ariaLabel={`Top ${category} activities by hours`}
             />
           </div>
         </Card>
         <Card>
-          <CardHeader title={`${category} hours by employee`} />
+          <CardHeader
+            title={`${category} hours by employee`}
+            subtitle="Click a bar for the employee detail"
+          />
           <div className="px-3 pb-3">
             <EChart
               option={horizontalBars(
@@ -93,6 +102,7 @@ function CategorySection({
                 { color },
               )}
               height={Math.max(160, byEmployee.length * 30 + 60)}
+              onClick={(p) => p.name && goDetail("employee", p.name)}
               ariaLabel={`${category} hours by employee`}
             />
           </div>
@@ -122,6 +132,10 @@ function CategorySection({
                   [{ name: `${category} hours`, values: months.map((m) => m.hours), color }],
                 )}
                 height={220}
+                onClick={(p) => {
+                  const match = months.find((m) => periodLabel(m.key) === p.name);
+                  if (match) goDetail("month", match.key);
+                }}
                 ariaLabel={`${category} hours by month`}
               />
             ) : (
@@ -133,7 +147,6 @@ function CategorySection({
           </div>
         </Card>
       </div>
-      <CodeDrilldown code={code} onClose={() => setCode(null)} />
     </div>
   );
 }
@@ -141,18 +154,22 @@ function CategorySection({
 export function IpAccelView() {
   const { filtered } = useDashboard();
   const [tab, setTab] = React.useState<"IP" | "Accelerator" | "codes">("IP");
-  const [code, setCode] = React.useState<string | null>(null);
   const codes = React.useMemo(() => summarizeCodes(filtered), [filtered]);
 
   const columns = React.useMemo<ColumnDef<CodeSummary, any>[]>(
     () => [
       {
+        id: "description",
+        header: "Activity",
+        accessorKey: "description",
+        cell: (c) => <span className="font-medium">{c.getValue()}</span>,
+      },
+      {
         id: "code",
         header: "Code",
         accessorKey: "code",
-        cell: (c) => <span className="font-mono font-medium">{c.getValue()}</span>,
+        cell: (c) => <span className="font-mono text-xs text-ink-2">{c.getValue()}</span>,
       },
-      { id: "description", header: "Description", accessorKey: "description" },
       { id: "category", header: "Category", accessorKey: "category" },
       {
         id: "hours",
@@ -181,7 +198,7 @@ export function IpAccelView() {
   const tabs: { id: typeof tab; label: string }[] = [
     { id: "IP", label: "IP" },
     { id: "Accelerator", label: "Accelerators" },
-    { id: "codes", label: "Code analysis" },
+    { id: "codes", label: "Activity analysis" },
   ];
 
   return (
@@ -210,22 +227,21 @@ export function IpAccelView() {
       {tab === "codes" ? (
         <Card>
           <CardHeader
-            title="Four-character code analysis"
-            subtitle="All development codes in scope — click a row for full detail"
+            title="Activity analysis"
+            subtitle="All development activities in scope (searchable by description, code or category) — click a row for full detail"
           />
           <div className="px-5 pb-4">
             <DataTable
               data={codes}
               columns={columns}
-              searchPlaceholder="Search code, description, category…"
-              onRowClick={(row) => setCode(row.code)}
-              csvName="code_analysis.csv"
+              searchPlaceholder="Search description, code or category…"
+              onRowClick={(row) => goDetail("code", row.code)}
+              csvName="activity_analysis.csv"
               testId="code-table"
             />
           </div>
         </Card>
       ) : null}
-      <CodeDrilldown code={code} onClose={() => setCode(null)} />
     </div>
   );
 }

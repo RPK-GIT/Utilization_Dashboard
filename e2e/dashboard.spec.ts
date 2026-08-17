@@ -2,9 +2,10 @@ import { expect, test } from "@playwright/test";
 import { configureFixtureTeam, ensureFixture, importFixture, resetApp } from "./helpers";
 
 /**
- * End-to-end: import workflow, KPI calculation, filters, drilldowns and data
- * quality — using the synthetic fixture export (structure identical to the
- * real monthly file, fictional employees). Expected values are documented in
+ * End-to-end: import workflow, KPI calculation, filters, description-first
+ * activity labels, routed drilldowns with Back, and data quality — using the
+ * synthetic fixture export (structure identical to the real monthly file,
+ * fictional employees). Expected values are documented in
  * scripts/make-fixture.mjs.
  */
 
@@ -34,10 +35,23 @@ test("imports the monthly excel, computes KPIs, filters and drills down", async 
   await expect(page.getByTestId("kpi-billable_percentage")).toHaveText("38.1%");
   await expect(page.getByTestId("filter-chips")).toContainText("Team: IP Delivery Team");
 
-  // Code filter.
-  await page.getByLabel("Code", { exact: true }).selectOption("DTEC");
+  // Activity filter is description-first and searches description AND code.
+  await page.getByTestId("activity-filter").click();
+  await page.getByTestId("activity-search").fill("Digital Time");
+  await expect(
+    page.getByRole("listbox").getByText("Digital Time entry Cockpit Simplified (DTEC)"),
+  ).toBeVisible();
+  await page.getByTestId("activity-search").fill("DTEC");
+  await page
+    .getByRole("listbox")
+    .getByText("Digital Time entry Cockpit Simplified (DTEC)")
+    .click();
+  await page.keyboard.press("Escape");
   await expect(page.getByTestId("kpi-total_hours")).toHaveText("14");
   await expect(page.getByTestId("kpi-ip_hours")).toHaveText("14");
+  await expect(page.getByTestId("filter-chips")).toContainText(
+    "Activity: Digital Time entry Cockpit Simplified (DTEC)",
+  );
 
   // Clear all filters restores the full scope.
   await page.getByRole("button", { name: "Clear filters" }).click();
@@ -48,21 +62,49 @@ test("imports the monthly excel, computes KPIs, filters and drills down", async 
   await expect(page.getByTestId("kpi-total_hours")).toHaveText("30");
   await page.getByRole("button", { name: "Clear filters" }).click();
 
-  // Team utilization page with drilldown.
+  // KPI card navigates to the classification detail with source records.
+  await page.getByTestId("kpi-card-billable_hours").click();
+  await expect(page.getByTestId("detail-title")).toHaveText("Billable hours");
+  await expect(page.getByTestId("detail-transactions")).toContainText("Customer work");
+  await page.getByTestId("detail-back").click();
+  await expect(page.getByTestId("kpi-total_hours")).toBeVisible();
+
+  // Team utilization page: row click opens the routed employee detail;
+  // Back returns and the active filter state is preserved.
+  await page.getByLabel("Team", { exact: true }).selectOption("IP Delivery Team");
   await page.locator("[data-nav=team]").click();
   await expect(page.getByTestId("team-table")).toContainText("Ivy Ipdelivery");
-  await page.getByTestId("team-table").getByText("Devon Developer").first().click();
-  await expect(page.getByRole("dialog")).toContainText("Development Team");
-  await page.getByRole("button", { name: "Close" }).click();
+  await page.getByTestId("team-table").getByText("Ivy Ipdelivery").first().click();
+  await expect(page.getByTestId("detail-title")).toHaveText("Ivy Ipdelivery");
+  await expect(page.getByTestId("detail-transactions")).toBeVisible();
+  await page.getByTestId("detail-back").click();
+  await expect(page.getByTestId("team-table")).toBeVisible();
+  await expect(page.getByTestId("filter-chips")).toContainText("Team: IP Delivery Team");
+  await page.getByRole("button", { name: "Clear filters" }).click();
 
-  // Code analysis table and drilldown.
+  // Activity analysis table is description-first and drills into detail.
   await page.locator("[data-nav=ip-accelerators]").click();
-  await page.getByRole("tab", { name: "Code analysis" }).click();
-  await expect(page.getByTestId("code-table")).toContainText("DTEC");
+  await page.getByRole("tab", { name: "Activity analysis" }).click();
+  await expect(page.getByTestId("code-table")).toContainText(
+    "Digital Time entry Cockpit Simplified",
+  );
   await expect(page.getByTestId("code-table")).toContainText("AIUG");
-  await page.getByTestId("code-table").getByText("DTEC").first().click();
-  await expect(page.getByRole("dialog")).toContainText("Digital Time entry Cockpit");
-  await page.getByRole("button", { name: "Close" }).click();
+  await page
+    .getByTestId("code-table")
+    .getByText("Digital Time entry Cockpit Simplified")
+    .first()
+    .click();
+  await expect(page.getByTestId("detail-title")).toHaveText(
+    "Digital Time entry Cockpit Simplified",
+  );
+  await expect(page.getByText("DTEC · IP")).toBeVisible();
+  await expect(page.getByTestId("detail-transactions")).toContainText(
+    "DTEC development sprint",
+  );
+
+  // Browser back also returns from the detail route.
+  await page.goBack();
+  await expect(page.getByTestId("code-table")).toBeVisible();
 
   // Data quality drill-through for the unknown code.
   await page.locator("[data-nav=quality]").click();
@@ -81,9 +123,7 @@ test("changing WBS configuration reclassifies after explicit reprocess", async (
 
   // Remove 0004C from billable prefixes.
   await page.goto("/#/admin");
-  await page
-    .locator('[aria-label="Remove 0004C"]')
-    .click();
+  await page.locator('[aria-label="Remove 0004C"]').click();
   await page.getByTestId("save-config").click();
   await expect(page.getByTestId("save-message")).toBeVisible();
 

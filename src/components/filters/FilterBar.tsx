@@ -4,13 +4,20 @@ import * as React from "react";
 import { FilterX } from "lucide-react";
 import { useDashboard } from "../DashboardContext";
 import { Button, Chip, Input, Select } from "../ui/primitives";
-import { clearFilters, filterChips, hasActiveFilters, removeChip } from "@/core/filters/engine";
-import { periodLabel } from "@/core/format";
+import { ActivityFilter, type ActivityOption } from "./ActivityFilter";
+import {
+  clearFilters,
+  filterChips,
+  hasActiveFilters,
+  removeChip,
+} from "@/core/filters/engine";
+import { activityLabel, periodLabel } from "@/core/format";
 
 /**
  * Executive filter bar — one row above everything it scopes. Every KPI,
  * chart, table and drilldown below re-renders against the same slice.
- * Active filters render as removable chips.
+ * Active filters render as removable chips; activity chips are
+ * description-first.
  */
 export function FilterBar() {
   const { rows, filters, setFilters, availablePeriods, config } = useDashboard();
@@ -29,17 +36,44 @@ export function FilterBar() {
     );
     return [...inData].sort();
   }, [rows]);
-  const codes = React.useMemo(
-    () =>
-      [...new Set(rows.map((r) => r.developmentCode).filter((c): c is string => !!c))].sort(),
-    [rows],
+
+  // Activity options: codes present in the data, described from configuration.
+  const activityOptions = React.useMemo<ActivityOption[]>(() => {
+    const codesInData = [
+      ...new Set(rows.map((r) => r.developmentCode).filter((c): c is string => !!c)),
+    ];
+    return codesInData
+      .map((code) => {
+        const configured = config.codes.find(
+          (c) => c.code.toUpperCase() === code.toUpperCase(),
+        );
+        const description = configured?.description ?? null;
+        return {
+          code,
+          description: description ?? "Unknown code",
+          category: configured?.category ?? "Unknown",
+          label: activityLabel(description, code),
+        };
+      })
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [rows, config.codes]);
+
+  const codeLabel = React.useCallback(
+    (code: string) =>
+      activityOptions.find((o) => o.code === code)?.label ??
+      activityLabel(
+        config.codes.find((c) => c.code.toUpperCase() === code.toUpperCase())
+          ?.description,
+        code,
+      ),
+    [activityOptions, config.codes],
   );
 
-  const chips = filterChips(filters, periodLabel);
+  const chips = filterChips(filters, periodLabel, codeLabel);
   const active = hasActiveFilters(filters);
 
   const single = (values: string[]) => (values.length === 1 ? values[0] : "");
-  const setList = (key: "periods" | "teams" | "employees" | "categories" | "codes") =>
+  const setList = (key: "periods" | "teams" | "employees" | "categories") =>
     (e: React.ChangeEvent<HTMLSelectElement>) =>
       setFilters({ ...filters, [key]: e.target.value ? [e.target.value] : [] });
 
@@ -90,14 +124,11 @@ export function FilterBar() {
             </option>
           ))}
         </Select>
-        <Select aria-label="Code" value={single(filters.codes)} onChange={setList("codes")}>
-          <option value="">All codes</option>
-          {codes.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </Select>
+        <ActivityFilter
+          options={activityOptions}
+          selected={filters.codes}
+          onChange={(codes) => setFilters({ ...filters, codes })}
+        />
         <Input
           type="date"
           aria-label="From date"
