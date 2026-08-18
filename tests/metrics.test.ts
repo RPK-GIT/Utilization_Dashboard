@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { classifyRows } from "@/core/classify/engine";
-import { computeKpis, kpiValue, summarizeEmployees } from "@/core/metrics/engine";
+import {
+  computeComposition,
+  computeKpis,
+  kpiValue,
+  summarizeEmployees,
+} from "@/core/metrics/engine";
+import { applyFilters } from "@/core/filters/engine";
+import { EMPTY_FILTERS } from "@/core/types";
 import { monthlyTrend, summarizeCodes } from "@/core/metrics/aggregate";
 import { row, scenarioRows, testConfig, IP_TEAM_MEMBER, DEV_TEAM_MEMBER } from "./fixtures/rows";
 
@@ -79,6 +86,76 @@ describe("KPI engine", () => {
     const kpis = computeKpis([], config);
     expect(kpiValue(kpis, "billable_percentage")).toBe(0);
     expect(kpiValue(kpis, "productive_percentage")).toBe(0);
+  });
+});
+
+describe("hours composition", () => {
+  it("segments always sum to Total Hours and 100%", () => {
+    const { config, rows } = classifiedScenario();
+    const comp = computeComposition(rows, config.categories);
+    // Scenario: total 36; billable 7; IP 7.5; accelerator 6; other 15.5
+    // (learning 1.5 + unknown 7 + excluded 2 + C9 1 + unclassified 4).
+    expect(comp.totalHours).toBeCloseTo(36);
+    const byKey = Object.fromEntries(comp.segments.map((s) => [s.key, s]));
+    expect(byKey.Billable.hours).toBeCloseTo(7);
+    expect(byKey.IP.hours).toBeCloseTo(7.5);
+    expect(byKey.Accelerator.hours).toBeCloseTo(6);
+    expect(byKey.Other.hours).toBeCloseTo(15.5);
+    expect(comp.otherHours).toBeCloseTo(
+      comp.totalHours - 7 - 7.5 - 6, // Other = Total − Billable − IP − Accelerator
+    );
+    const shareSum = comp.segments.reduce((a, s) => a + s.shareOfTotal, 0);
+    expect(shareSum).toBeCloseTo(100);
+    const hourSum = comp.segments.reduce((a, s) => a + s.hours, 0);
+    expect(hourSum).toBeCloseTo(comp.totalHours);
+    expect(comp.reconciles).toBe(true);
+    expect(comp.difference).toBeCloseTo(0);
+  });
+
+  it("Productive Hours equals Billable + productive-category segments", () => {
+    const { config, rows } = classifiedScenario();
+    const comp = computeComposition(rows, config.categories);
+    const kpis = computeKpis(rows, config);
+    const productiveFromSegments = comp.segments
+      .filter((s) => s.kind !== "other")
+      .reduce((a, s) => a + s.hours, 0);
+    expect(productiveFromSegments).toBeCloseTo(kpiValue(kpis, "productive_hours"));
+  });
+
+  it("responds to filters — composition is never hardcoded", () => {
+    const { config, rows } = classifiedScenario();
+    const scoped = applyFilters(rows, {
+      ...EMPTY_FILTERS,
+      teams: ["IP Delivery Team"],
+    });
+    const comp = computeComposition(scoped, config.categories);
+    // IP team: billable 4, IP 5 (DTEC), learning 1.5 → other 1.5.
+    expect(comp.totalHours).toBeCloseTo(10.5);
+    expect(comp.segments.find((s) => s.key === "Billable")!.hours).toBeCloseTo(4);
+    expect(comp.otherHours).toBeCloseTo(1.5);
+    expect(comp.reconciles).toBe(true);
+  });
+
+  it("a newly configured productive category flows through automatically", () => {
+    const config = testConfig();
+    // Admin marks Learning productive: its hours leave Other with no code change.
+    config.categories = config.categories.map((c) =>
+      c.name === "Learning" ? { ...c, productive: true } : c,
+    );
+    const rows = classifyRows(scenarioRows(), config, PERIOD);
+    const comp = computeComposition(rows, config.categories);
+    const learning = comp.segments.find((s) => s.key === "Learning");
+    expect(learning?.hours).toBeCloseTo(1.5);
+    expect(comp.otherHours).toBeCloseTo(15.5 - 1.5);
+    expect(comp.reconciles).toBe(true);
+  });
+
+  it("returns zeros for an empty scope without NaN", () => {
+    const { config } = classifiedScenario();
+    const comp = computeComposition([], config.categories);
+    expect(comp.totalHours).toBe(0);
+    expect(comp.segments.every((s) => s.shareOfTotal === 0)).toBe(true);
+    expect(comp.reconciles).toBe(true);
   });
 });
 

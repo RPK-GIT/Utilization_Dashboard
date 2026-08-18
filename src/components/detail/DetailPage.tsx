@@ -300,6 +300,108 @@ function TeamDetail({ value }: { value: string }) {
   );
 }
 
+/**
+ * Other Hours — the residual of the hours composition: everything not
+ * classified as Billable or as a productive category under the CURRENT
+ * configuration. The category breakdown reconciles exactly to Other Hours;
+ * rows without an activity category (excluded, not billable, unclassified
+ * WBS) appear under their classification so nothing is unexplained.
+ */
+function OtherDetail() {
+  const { filtered, config } = useDashboard();
+  const productive = React.useMemo(
+    () =>
+      new Set(
+        config.categories.filter((c) => c.active && c.productive).map((c) => c.name),
+      ),
+    [config.categories],
+  );
+  const rows = React.useMemo(
+    () =>
+      filtered.filter(
+        (r) =>
+          !r.isBillable &&
+          (!r.developmentCategory || !productive.has(r.developmentCategory)),
+      ),
+    [filtered, productive],
+  );
+  const totalOther = sumHours(rows);
+  const scopeTotal = sumHours(filtered);
+  const breakdown = groupHours(rows, (r) => r.developmentCategory ?? r.classification);
+  const breakdownTotal = breakdown.reduce((a, b) => a + b.hours, 0);
+  const configCategories = React.useMemo(
+    () => new Set(config.categories.map((c) => c.name)),
+    [config.categories],
+  );
+
+  return (
+    <DetailShell
+      title="Other hours"
+      subtitle="Hours not classified as Billable, IP or Accelerator under the current dashboard configuration"
+    >
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <Stat label="Other hours" value={formatHours(totalOther)} />
+        <Stat
+          label="Share of Total Hours"
+          value={formatPercent(scopeTotal === 0 ? 0 : (totalOther / scopeTotal) * 100)}
+        />
+        <Stat label="Categories" value={String(breakdown.length)} />
+        <Stat label="Transactions" value={String(rows.length)} />
+      </div>
+      <Card>
+        <CardHeader
+          title="Category breakdown"
+          subtitle={`These categories sum exactly to Other Hours (${formatHours(breakdownTotal)} = ${formatHours(totalOther)}) — click a row for the category detail`}
+        />
+        <div className="overflow-x-auto px-5 pb-4">
+          <table className="w-full text-sm" data-testid="other-breakdown">
+            <thead>
+              <tr className="border-b border-grid text-left text-xs font-semibold text-ink-2">
+                <th className="px-2 py-2">Category</th>
+                <th className="px-2 py-2 text-right">Hours</th>
+                <th className="px-2 py-2 text-right">% of Other</th>
+                <th className="px-2 py-2 text-right">Rows</th>
+              </tr>
+            </thead>
+            <tbody>
+              {breakdown.map((b) => (
+                <tr
+                  key={b.key}
+                  className="border-b border-grid last:border-b-0 hover:bg-page cursor-pointer"
+                  onClick={() =>
+                    configCategories.has(b.key)
+                      ? goDetail("category", b.key)
+                      : goDetail("classification", b.key)
+                  }
+                >
+                  <td className="px-2 py-1.5 font-medium text-ink">{b.key}</td>
+                  <td className="px-2 py-1.5 text-right tnum">{formatHours(b.hours)}</td>
+                  <td className="px-2 py-1.5 text-right tnum">
+                    {formatPercent(totalOther === 0 ? 0 : (b.hours / totalOther) * 100)}
+                  </td>
+                  <td className="px-2 py-1.5 text-right tnum">{b.rows}</td>
+                </tr>
+              ))}
+              <tr className="bg-page text-xs font-semibold">
+                <td className="px-2 py-1.5">Total</td>
+                <td className="px-2 py-1.5 text-right tnum">
+                  {formatHours(breakdownTotal)}
+                </td>
+                <td className="px-2 py-1.5 text-right tnum">
+                  {formatPercent(totalOther === 0 ? 0 : 100)}
+                </td>
+                <td className="px-2 py-1.5 text-right tnum">{rows.length}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </Card>
+      <EmployeeBars rows={rows} />
+      <Transactions rows={rows} csvName="other_hours.csv" />
+    </DetailShell>
+  );
+}
+
 const CLASSIFICATION_FILTERS: Record<
   string,
   { title: string; subtitle: string; predicate: (r: ClassifiedRow) => boolean }
@@ -363,6 +465,10 @@ export function DetailPage({ route }: { route: DetailRoute }) {
     case "month":
       return <MonthDetail value={route.value} />;
     case "classification":
-      return <ClassificationDetail value={route.value} />;
+      return route.value === "Other" ? (
+        <OtherDetail />
+      ) : (
+        <ClassificationDetail value={route.value} />
+      );
   }
 }

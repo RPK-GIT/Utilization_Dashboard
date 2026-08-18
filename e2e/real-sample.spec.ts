@@ -44,6 +44,13 @@ test("dashboard reproduces independently computed KPIs from the real export", as
   await expect(page.getByTestId("kpi-productive_percentage")).toHaveText("41.4%");
   await expect(page.getByTestId("kpi-ip_delivery_hours")).toHaveText("737.5");
 
+  // Hours composition from the real export:
+  // 4,811 = 692.5 Billable + 1,247.5 IP + 53.5 Accelerator + 2,817.5 Other.
+  await expect(page.getByTestId("hours-composition")).toContainText("Total Hours: 4,811");
+  await expect(page.getByTestId("comp-Other")).toContainText("2,817.5 hrs");
+  await expect(page.getByTestId("comp-Other")).toContainText("58.6% of Total Hours");
+  await expect(page.getByTestId("reconciliation-ok")).toBeVisible();
+
   // IP Delivery Team scope: 737.5 total, 384 billable → 52.1% (ratio of sums).
   await applyMultiFilter(page, "filter-team", ["IP Delivery Team"]);
   await expect(page.getByTestId("kpi-total_hours")).toHaveText("737.5");

@@ -94,6 +94,95 @@ export function kpiValue(kpis: KpiValue[], id: string): number {
   return kpis.find((k) => k.id === id)?.value ?? 0;
 }
 
+/* ------------------------------------------------------------------ */
+/* Hours composition                                                    */
+/* ------------------------------------------------------------------ */
+
+export interface CompositionSegment {
+  /** Segment key: "Billable", a productive category name, or "Other". */
+  key: string;
+  kind: "billable" | "category" | "other";
+  hours: number;
+  /** Share of Total Hours (0–100). */
+  shareOfTotal: number;
+}
+
+export interface HoursComposition {
+  totalHours: number;
+  /** Billable + one segment per active productive category + Other. */
+  segments: CompositionSegment[];
+  otherHours: number;
+  /** True when every hour is assigned to exactly one segment. */
+  reconciles: boolean;
+  /** Unassigned residual (should always be 0). */
+  difference: number;
+}
+
+/**
+ * Decomposes Total Hours into disjoint segments that always sum to 100%:
+ * Billable, one segment per configured productive category (initially IP and
+ * Accelerator — new productive categories flow through automatically), and
+ * Other (everything else: non-productive categories, unknown codes, excluded
+ * or unclassified WBS). "Other" is intentionally NOT called non-productive —
+ * it is simply what the current configuration does not classify as Billable,
+ * IP or Accelerator.
+ *
+ * Other Hours are defined by subtraction (Total − Billable − productive
+ * categories) per the business rule, and reconciled against the row-level
+ * assignment so no hour is ever silently lost.
+ */
+export function computeComposition(
+  rows: ClassifiedRow[],
+  categories: { name: string; productive: boolean; active: boolean }[],
+): HoursComposition {
+  const totalHours = sumHours(rows);
+  const productiveCategories = categories
+    .filter((c) => c.active && c.productive)
+    .map((c) => c.name);
+
+  const billable = billableHours(rows);
+  const categoryHours = new Map<string, number>(
+    productiveCategories.map((name) => [name, 0]),
+  );
+  let assignedOther = 0;
+  for (const row of rows) {
+    if (row.isBillable) continue;
+    if (row.developmentCategory && categoryHours.has(row.developmentCategory)) {
+      categoryHours.set(
+        row.developmentCategory,
+        categoryHours.get(row.developmentCategory)! + row.hours,
+      );
+    } else {
+      assignedOther += row.hours;
+    }
+  }
+
+  const classifiedHours =
+    billable + [...categoryHours.values()].reduce((a, v) => a + v, 0);
+  const otherHours = totalHours - classifiedHours;
+  const difference = otherHours - assignedOther;
+  const share = (hours: number) => (totalHours === 0 ? 0 : (hours / totalHours) * 100);
+
+  const segments: CompositionSegment[] = [
+    { key: "Billable", kind: "billable", hours: billable, shareOfTotal: share(billable) },
+    ...productiveCategories.map((name) => ({
+      key: name,
+      kind: "category" as const,
+      hours: categoryHours.get(name) ?? 0,
+      shareOfTotal: share(categoryHours.get(name) ?? 0),
+    })),
+    { key: "Other", kind: "other", hours: otherHours, shareOfTotal: share(otherHours) },
+  ];
+
+  return {
+    totalHours,
+    segments,
+    otherHours,
+    reconciles: Math.abs(difference) < 0.005,
+    difference,
+  };
+}
+
 /** Per-employee utilization summary used by the team page and drilldowns. */
 export interface EmployeeSummary {
   employee: string;

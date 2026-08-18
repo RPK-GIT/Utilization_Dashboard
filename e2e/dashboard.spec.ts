@@ -110,6 +110,40 @@ test("imports the monthly excel, computes KPIs, filters and drills down", async 
   await expect(page.getByTestId("filter-chips")).toContainText("To Date: 2026-07-10");
   await page.getByTestId("clear-filters").click();
 
+  // Hours composition: segments sum to Total Hours, reconciliation shown.
+  // Fixture: 86.5 = 24 Billable + 22.5 IP + 6 Accelerator + 34 Other.
+  await expect(page.getByTestId("hours-composition")).toContainText("Total Hours: 86.5");
+  await expect(page.getByTestId("comp-Billable")).toContainText("24 hrs");
+  await expect(page.getByTestId("comp-IP")).toContainText("22.5 hrs");
+  await expect(page.getByTestId("comp-Accelerator")).toContainText("6 hrs");
+  await expect(page.getByTestId("comp-Other")).toContainText("34 hrs");
+  await expect(page.getByTestId("comp-Other")).toContainText("39.3% of Total Hours");
+  await expect(page.getByTestId("reconciliation-ok")).toContainText(
+    "100% of total hours accounted for",
+  );
+
+  // Other segment drills into the category breakdown, which reconciles
+  // exactly: Learning 12 + Unknown 8 + Excluded 6 + Not Billable 4 +
+  // Unclassified 4 = 34.
+  await page.getByTestId("comp-Other").click();
+  await expect(page.getByTestId("detail-title")).toHaveText("Other hours");
+  await expect(page.getByTestId("other-breakdown")).toContainText("Learning");
+  await expect(page.getByTestId("other-breakdown")).toContainText("Unknown");
+  await expect(page.getByTestId("other-breakdown")).toContainText("Excluded");
+  await expect(page.getByTestId("other-breakdown")).toContainText("Unclassified");
+  await expect(page.getByTestId("other-breakdown").locator("tr").last()).toContainText(
+    "34",
+  );
+  await page.getByTestId("detail-back").click();
+  await expect(page.getByTestId("hours-composition")).toBeVisible();
+
+  // Composition responds to filters: IP Delivery team → 42 = 16 + 14 + 0 + 12.
+  await applyMultiFilter(page, "filter-team", ["IP Delivery Team"]);
+  await expect(page.getByTestId("hours-composition")).toContainText("Total Hours: 42");
+  await expect(page.getByTestId("comp-Other")).toContainText("12 hrs");
+  await expect(page.getByTestId("reconciliation-ok")).toBeVisible();
+  await page.getByTestId("clear-filters").click();
+
   // Total Hours KPI navigates to a routed detail with Back.
   await page.getByTestId("kpi-card-total_hours").click();
   await expect(page.getByTestId("detail-title")).toHaveText("Total hours");

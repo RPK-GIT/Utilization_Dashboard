@@ -149,6 +149,64 @@ export function donut(
   };
 }
 
+export interface CompositionBarSegment {
+  key: string;
+  hours: number;
+  shareOfTotal: number;
+  color: string;
+  /** Extra tooltip line (e.g. "Click to see category breakdown"). */
+  hint?: string;
+}
+
+/**
+ * Single-row 100% stacked horizontal bar for the hours composition.
+ * Segments are separated by a 2px surface gap; tooltips lead with the value
+ * and its share of Total Hours.
+ */
+export function compositionBar(
+  segments: CompositionBarSegment[],
+): EChartsCoreOption {
+  const visible = segments.filter((s) => s.hours > 0);
+  return {
+    tooltip: {
+      trigger: "item",
+      ...TOOLTIP_STYLE,
+      formatter: (p: { seriesName: string }) => {
+        const seg = segments.find((s) => s.key === p.seriesName);
+        if (!seg) return "";
+        const hint = seg.hint
+          ? `<br/><span style="color:${INK_2};font-size:11px">${escapeHtml(seg.hint)}</span>`
+          : "";
+        return `<strong>${escapeHtml(seg.key)} Hours</strong><br/>${formatHours(seg.hours)} hrs<br/><span style="color:${INK_2}">${formatPercent(seg.shareOfTotal)} of Total Hours</span>${hint}`;
+      },
+    },
+    grid: { left: 0, right: 0, top: 0, bottom: 0 },
+    xAxis: { type: "value", max: 100, show: false },
+    yAxis: { type: "category", data: [""], show: false },
+    series: visible.map((seg, i) => ({
+      name: seg.key,
+      type: "bar" as const,
+      stack: "total",
+      barWidth: 22,
+      data: [seg.shareOfTotal],
+      itemStyle: {
+        color: seg.color,
+        // 2px surface gap between stacked segments; rounded data-ends on the
+        // outermost segments only.
+        borderColor: SURFACE,
+        borderWidth: 1,
+        borderRadius:
+          i === 0
+            ? ([4, 0, 0, 4] as [number, number, number, number])
+            : i === visible.length - 1
+              ? ([0, 4, 4, 0] as [number, number, number, number])
+              : 0,
+      },
+      emphasis: { itemStyle: { opacity: 0.85 } },
+    })),
+  };
+}
+
 export interface TrendSeries {
   name: string;
   values: number[];

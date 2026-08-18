@@ -7,6 +7,7 @@ import { EChart } from "../charts/EChart";
 import { donut, horizontalBars, trendLines } from "../charts/builders";
 import { SERIES } from "../charts/theme";
 import { KpiCards } from "../kpi/KpiCards";
+import { HoursComposition } from "../kpi/HoursComposition";
 import { goDetail } from "../navigation";
 import { summarizeEmployees } from "@/core/metrics/engine";
 import { monthlyTrend, summarizeCodes, groupHours } from "@/core/metrics/aggregate";
@@ -88,6 +89,7 @@ export function OverviewView() {
           "ip_delivery_hours",
         ]}
       />
+      <HoursComposition />
       <div className="grid gap-4 lg:grid-cols-3">
         <Card>
           <CardHeader

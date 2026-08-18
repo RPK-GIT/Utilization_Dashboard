@@ -1,9 +1,11 @@
 "use client";
 
 import * as React from "react";
+import { CircleCheck, TriangleAlert } from "lucide-react";
 import { useDashboard } from "../DashboardContext";
 import { Card, CardHeader } from "../ui/primitives";
 import { TransactionsTable } from "../tables/TransactionsTable";
+import { computeComposition } from "@/core/metrics/engine";
 import { formatHours } from "@/core/format";
 import type { ClassifiedRow } from "@/core/types";
 
@@ -22,8 +24,14 @@ interface ExceptionGroup {
 }
 
 export function DataQualityView() {
-  const { filtered } = useDashboard();
+  const { filtered, config } = useDashboard();
   const [selected, setSelected] = React.useState<string | null>(null);
+
+  // Hours reconciliation: Total = Billable + productive categories + Other.
+  const composition = React.useMemo(
+    () => computeComposition(filtered, config.categories),
+    [filtered, config.categories],
+  );
 
   const groups = React.useMemo<ExceptionGroup[]>(() => {
     const missingEmployee = filtered.filter((r) => !r.employee);
@@ -137,6 +145,28 @@ export function DataQualityView() {
 
   return (
     <div className="flex flex-col gap-4">
+      {composition.reconciles ? (
+        <p
+          className="flex items-center gap-1.5 rounded-md border border-good/30 bg-green-50 px-3 py-2 text-xs font-medium text-good-text"
+          data-testid="dq-reconciliation-ok"
+        >
+          <CircleCheck className="h-3.5 w-3.5" />
+          Hours reconciliation: {formatHours(composition.totalHours)} total hours ={" "}
+          {composition.segments
+            .map((s) => `${formatHours(s.hours)} ${s.key}`)
+            .join(" + ")}{" "}
+          — 100% accounted for.
+        </p>
+      ) : (
+        <p
+          className="flex items-center gap-1.5 rounded-md border border-critical/30 bg-red-50 px-3 py-2 text-xs font-medium text-critical"
+          data-testid="dq-reconciliation-warning"
+        >
+          <TriangleAlert className="h-3.5 w-3.5" />
+          Hours reconciliation issue — Total {formatHours(composition.totalHours)},
+          unassigned difference {formatHours(Math.abs(composition.difference))} hours.
+        </p>
+      )}
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {groups.map((g) => {
           const hours = g.rows.reduce((a, r) => a + r.hours, 0);

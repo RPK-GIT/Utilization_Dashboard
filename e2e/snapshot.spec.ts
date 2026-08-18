@@ -85,6 +85,14 @@ test("generates a self-contained executive snapshot that works offline", async (
   await expect(snap.getByText("frozen point-in-time snapshot")).toBeVisible();
   expect(await snap.locator("canvas").count()).toBeGreaterThan(0);
 
+  // Hours composition works inside the snapshot (filtered scope: 42 total).
+  await expect(snap.getByTestId("hours-composition")).toContainText("Total Hours: 42");
+  await expect(snap.getByTestId("reconciliation-ok")).toBeVisible();
+  await snap.getByTestId("comp-Other").click();
+  await expect(snap.getByTestId("detail-title")).toHaveText("Other hours");
+  await expect(snap.getByTestId("other-breakdown")).toContainText("Learning");
+  await snap.getByTestId("detail-back").click();
+
   // KPI navigation inside the snapshot: Total Hours → detail → Back.
   await snap.getByTestId("kpi-card-total_hours").click();
   await expect(snap.getByTestId("detail-title")).toHaveText("Total hours");
