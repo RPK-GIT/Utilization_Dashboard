@@ -3,9 +3,9 @@
 import * as React from "react";
 import { useDashboard } from "../DashboardContext";
 import { BackButton } from "./BackButton";
+import { VizContainer } from "../viz/VizContainer";
+import { TrendContainer } from "../viz/TrendContainer";
 import { Badge, Card, CardHeader } from "../ui/primitives";
-import { EChart } from "../charts/EChart";
-import { horizontalBars, trendLines } from "../charts/builders";
 import { SERIES } from "../charts/theme";
 import { TransactionsTable } from "../tables/TransactionsTable";
 import { formatHours, formatPercent, periodLabel } from "@/core/format";
@@ -85,20 +85,33 @@ function EmployeeBars({
 }) {
   const byEmployee = groupHours(rows, (r) => r.employee).slice(0, 12);
   return (
-    <Card>
-      <CardHeader title="Hours by employee" subtitle="Click a bar for the employee detail" />
-      <div className="px-3 pb-3">
-        <EChart
-          option={horizontalBars(
-            byEmployee.map((b) => ({ name: b.key, value: b.hours })),
-            { color },
-          )}
-          height={Math.max(150, byEmployee.length * 30 + 60)}
-          onClick={(p) => p.name && goDetail("employee", p.name)}
-          ariaLabel="Hours by employee"
-        />
-      </div>
-    </Card>
+    <VizContainer
+      blockId="detail-by-employee"
+      title="Hours by employee"
+      subtitle="Click for the employee detail"
+      items={byEmployee.map((b) => ({ key: b.key, label: b.key, value: b.hours }))}
+      kinds={["horizontalBar", "verticalBar", "donut", "pie", "table"]}
+      defaultKind="horizontalBar"
+      color={color}
+      onItemClick={(key) => goDetail("employee", key)}
+    />
+  );
+}
+
+function CategoryBars({ rows, blockId }: { rows: ClassifiedRow[]; blockId: string }) {
+  const byCategory = groupHours(rows, (r) => r.developmentCategory ?? r.classification);
+  return (
+    <VizContainer
+      blockId={blockId}
+      title="Hours by category"
+      subtitle="Click for the category detail"
+      items={byCategory
+        .slice(0, 10)
+        .map((b) => ({ key: b.key, label: b.key, value: b.hours }))}
+      kinds={["horizontalBar", "verticalBar", "donut", "pie", "table"]}
+      defaultKind="horizontalBar"
+      onItemClick={(key) => goDetail("category", key)}
+    />
   );
 }
 
@@ -124,23 +137,10 @@ function EmployeeDetail({ value }: { value: string }) {
     () => filtered.filter((r) => r.employee === value),
     [filtered, value],
   );
-  const byCategory = groupHours(rows, (r) => r.developmentCategory ?? r.classification);
   return (
     <DetailShell title={value} subtitle={rows[0] ? rows[0].team : "No records in scope"}>
       <CoreStats rows={rows} />
-      <Card>
-        <CardHeader title="Hours by category" subtitle="Click a bar for the category detail" />
-        <div className="px-3 pb-3">
-          <EChart
-            option={horizontalBars(
-              byCategory.slice(0, 10).map((b) => ({ name: b.key, value: b.hours })),
-            )}
-            height={Math.max(160, byCategory.slice(0, 10).length * 30 + 60)}
-            onClick={(p) => p.name && goDetail("category", p.name)}
-            ariaLabel={`Hours by category for ${value}`}
-          />
-        </div>
-      </Card>
+      <CategoryBars rows={rows} blockId="detail-employee-categories" />
       <Transactions rows={rows} csvName={`employee_${value}.csv`} />
     </DetailShell>
   );
@@ -175,27 +175,16 @@ function CodeDetail({ value }: { value: string }) {
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
         <EmployeeBars rows={rows} />
-        <Card>
-          <CardHeader title="Monthly trend" />
-          <div className="px-3 pb-3">
-            {months.length > 1 ? (
-              <EChart
-                option={trendLines(
-                  months.map((m) => periodLabel(m.key)),
-                  [{ name: "Hours", values: months.map((m) => m.hours), color: SERIES[0] }],
-                )}
-                height={220}
-                ariaLabel={`Monthly hours trend for ${description ?? value}`}
-              />
-            ) : (
-              <p className="px-2 pb-4 text-xs text-muted">
-                Single period in scope — {months[0] ? periodLabel(months[0].key) : "—"},{" "}
-                {formatHours(sumHours(rows))} hours. Trend appears once multiple months
-                are loaded.
-              </p>
-            )}
-          </div>
-        </Card>
+        <TrendContainer
+          blockId="detail-code-trend"
+          title="Monthly trend"
+          points={months.map((m) => ({ key: m.key, label: periodLabel(m.key) }))}
+          series={[
+            { name: "Hours", values: months.map((m) => m.hours), color: SERIES[0] },
+          ]}
+          onPointClick={(key) => goDetail("month", key)}
+          emptyMessage={`Single period in scope — ${months[0] ? periodLabel(months[0].key) : "—"}, ${formatHours(sumHours(rows))} hours. Trend appears once multiple months are loaded.`}
+        />
       </div>
       <Card>
         <CardHeader title="WBS breakdown" />
@@ -223,27 +212,21 @@ function CategoryDetail({ value }: { value: string }) {
     <DetailShell title={value} subtitle="Activity category">
       <CoreStats rows={rows} />
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader title="Activities in this category" subtitle="Click a bar for the activity detail" />
-          <div className="px-3 pb-3">
-            <EChart
-              option={horizontalBars(
-                codes.slice(0, 10).map((c) => ({
-                  name: c.description,
-                  value: c.hours,
-                  detail: `${c.code} · ${c.category}`,
-                })),
-                { labelWidth: 220 },
-              )}
-              height={Math.max(150, Math.min(codes.length, 10) * 32 + 60)}
-              onClick={(p) => {
-                const match = codes.find((c) => c.description === p.name);
-                if (match) goDetail("code", match.code);
-              }}
-              ariaLabel={`Activities in category ${value}`}
-            />
-          </div>
-        </Card>
+        <VizContainer
+          blockId="detail-category-activities"
+          title="Activities in this category"
+          subtitle="Click for the activity detail"
+          items={codes.slice(0, 10).map((c) => ({
+            key: c.code,
+            label: c.description,
+            value: c.hours,
+            detail: `${c.code} · ${c.category}`,
+          }))}
+          kinds={["horizontalBar", "verticalBar", "donut", "pie", "table"]}
+          defaultKind="horizontalBar"
+          labelWidth={220}
+          onItemClick={(key) => goDetail("code", key)}
+        />
         <EmployeeBars rows={rows} />
       </div>
       <Transactions rows={rows} csvName={`category_${value}.csv`} />
@@ -272,25 +255,12 @@ function TeamDetail({ value }: { value: string }) {
     () => filtered.filter((r) => r.team === value),
     [filtered, value],
   );
-  const byCategory = groupHours(rows, (r) => r.developmentCategory ?? r.classification);
   return (
     <DetailShell title={`${value} hours`} subtitle="All source transactions logged by this team's members">
       <CoreStats rows={rows} />
       <div className="grid gap-4 lg:grid-cols-2">
         <EmployeeBars rows={rows} />
-        <Card>
-          <CardHeader title="Hours by category" subtitle="Click a bar for the category detail" />
-          <div className="px-3 pb-3">
-            <EChart
-              option={horizontalBars(
-                byCategory.slice(0, 10).map((b) => ({ name: b.key, value: b.hours })),
-              )}
-              height={Math.max(160, byCategory.slice(0, 10).length * 30 + 60)}
-              onClick={(p) => p.name && goDetail("category", p.name)}
-              ariaLabel={`Hours by category for ${value}`}
-            />
-          </div>
-        </Card>
+        <CategoryBars rows={rows} blockId="detail-team-categories" />
       </div>
       <Transactions rows={rows} csvName={`team_${value}.csv`} />
     </DetailShell>
@@ -345,54 +315,21 @@ function OtherDetail() {
         <Stat label="Categories" value={String(breakdown.length)} />
         <Stat label="Transactions" value={String(rows.length)} />
       </div>
-      <Card>
-        <CardHeader
-          title="Category breakdown"
-          subtitle={`These categories sum exactly to Other Hours (${formatHours(breakdownTotal)} = ${formatHours(totalOther)}) — click a row for the category detail`}
-        />
-        <div className="overflow-x-auto px-5 pb-4">
-          <table className="w-full text-sm" data-testid="other-breakdown">
-            <thead>
-              <tr className="border-b border-grid text-left text-xs font-semibold text-ink-2">
-                <th className="px-2 py-2">Category</th>
-                <th className="px-2 py-2 text-right">Hours</th>
-                <th className="px-2 py-2 text-right">% of Other</th>
-                <th className="px-2 py-2 text-right">Rows</th>
-              </tr>
-            </thead>
-            <tbody>
-              {breakdown.map((b) => (
-                <tr
-                  key={b.key}
-                  className="border-b border-grid last:border-b-0 hover:bg-page cursor-pointer"
-                  onClick={() =>
-                    configCategories.has(b.key)
-                      ? goDetail("category", b.key)
-                      : goDetail("classification", b.key)
-                  }
-                >
-                  <td className="px-2 py-1.5 font-medium text-ink">{b.key}</td>
-                  <td className="px-2 py-1.5 text-right tnum">{formatHours(b.hours)}</td>
-                  <td className="px-2 py-1.5 text-right tnum">
-                    {formatPercent(totalOther === 0 ? 0 : (b.hours / totalOther) * 100)}
-                  </td>
-                  <td className="px-2 py-1.5 text-right tnum">{b.rows}</td>
-                </tr>
-              ))}
-              <tr className="bg-page text-xs font-semibold">
-                <td className="px-2 py-1.5">Total</td>
-                <td className="px-2 py-1.5 text-right tnum">
-                  {formatHours(breakdownTotal)}
-                </td>
-                <td className="px-2 py-1.5 text-right tnum">
-                  {formatPercent(totalOther === 0 ? 0 : 100)}
-                </td>
-                <td className="px-2 py-1.5 text-right tnum">{rows.length}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      <VizContainer
+        blockId="other-breakdown-viz"
+        title="Category breakdown"
+        subtitle={`These categories sum exactly to Other Hours (${formatHours(breakdownTotal)} = ${formatHours(totalOther)}) — click for the category detail`}
+        items={breakdown.map((b) => ({ key: b.key, label: b.key, value: b.hours }))}
+        kinds={["table", "donut", "pie", "horizontalBar", "verticalBar"]}
+        defaultKind="table"
+        includeTotal
+        tableTestId="other-breakdown"
+        onItemClick={(key) =>
+          configCategories.has(key)
+            ? goDetail("category", key)
+            : goDetail("classification", key)
+        }
+      />
       <EmployeeBars rows={rows} />
       <Transactions rows={rows} csvName="other_hours.csv" />
     </DetailShell>

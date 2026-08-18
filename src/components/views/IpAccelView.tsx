@@ -4,10 +4,10 @@ import * as React from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useDashboard } from "../DashboardContext";
 import { Card, CardHeader } from "../ui/primitives";
-import { EChart } from "../charts/EChart";
-import { horizontalBars, trendLines } from "../charts/builders";
 import { ENTITY_COLORS } from "../charts/theme";
 import { DataTable } from "../tables/DataTable";
+import { VizContainer } from "../viz/VizContainer";
+import { TrendContainer } from "../viz/TrendContainer";
 import { goDetail } from "../navigation";
 import {
   summarizeCodes,
@@ -58,12 +58,6 @@ function CategorySection({
   const months = React.useMemo(() => hoursByMonth(rows), [rows]);
   const total = rows.reduce((a, r) => a + r.hours, 0);
 
-  const codeBars = codes.slice(0, 10).map((c) => ({
-    name: c.description,
-    value: c.hours,
-    detail: `${c.code} · ${c.category}`,
-  }));
-
   return (
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -73,83 +67,53 @@ function CategorySection({
         <SectionStat label="Transactions" value={String(rows.length)} />
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader
-            title={`Top ${category === "IP" ? "IPs" : "accelerators"}`}
-            subtitle="Click a bar to open the activity detail"
-          />
-          <div className="px-3 pb-3">
-            <EChart
-              option={horizontalBars(codeBars, { labelWidth: 220, color })}
-              height={Math.max(160, codeBars.length * 32 + 60)}
-              onClick={(p) => {
-                const match = codes.find((c) => c.description === p.name);
-                if (match) goDetail("code", match.code);
-              }}
-              ariaLabel={`Top ${category} activities by hours`}
-            />
-          </div>
-        </Card>
-        <Card>
-          <CardHeader
-            title={`${category} hours by employee`}
-            subtitle="Click a bar for the employee detail"
-          />
-          <div className="px-3 pb-3">
-            <EChart
-              option={horizontalBars(
-                byEmployee.map((b) => ({ name: b.key, value: b.hours })),
-                { color },
-              )}
-              height={Math.max(160, byEmployee.length * 30 + 60)}
-              onClick={(p) => p.name && goDetail("employee", p.name)}
-              ariaLabel={`${category} hours by employee`}
-            />
-          </div>
-        </Card>
+        <VizContainer
+          blockId={`${category.toLowerCase()}-top-activities`}
+          title={`Top ${category === "IP" ? "IPs" : "accelerators"}`}
+          subtitle="Click to open the activity detail"
+          items={codes.slice(0, 10).map((c) => ({
+            key: c.code,
+            label: c.description,
+            value: c.hours,
+            detail: `${c.code} · ${c.category}`,
+          }))}
+          kinds={["horizontalBar", "verticalBar", "donut", "pie", "table"]}
+          defaultKind="horizontalBar"
+          labelWidth={220}
+          color={color}
+          onItemClick={(key) => goDetail("code", key)}
+        />
+        <VizContainer
+          blockId={`${category.toLowerCase()}-by-employee`}
+          title={`${category} hours by employee`}
+          subtitle="Click for the employee detail"
+          items={byEmployee.map((b) => ({ key: b.key, label: b.key, value: b.hours }))}
+          kinds={["horizontalBar", "verticalBar", "donut", "pie", "table"]}
+          defaultKind="horizontalBar"
+          color={color}
+          onItemClick={(key) => goDetail("employee", key)}
+        />
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader
-            title={`${category} hours by team`}
-            subtitle="Click a bar for the team detail"
-          />
-          <div className="px-3 pb-3">
-            <EChart
-              option={horizontalBars(
-                byTeam.map((b) => ({ name: b.key, value: b.hours })),
-                { color },
-              )}
-              height={Math.max(120, byTeam.length * 44 + 60)}
-              onClick={(p) => p.name && goDetail("team", p.name)}
-              ariaLabel={`${category} hours by team`}
-            />
-          </div>
-        </Card>
-        <Card>
-          <CardHeader title={`${category} hours by month`} />
-          <div className="px-3 pb-3">
-            {months.length > 1 ? (
-              <EChart
-                option={trendLines(
-                  months.map((m) => periodLabel(m.key)),
-                  [{ name: `${category} hours`, values: months.map((m) => m.hours), color }],
-                )}
-                height={220}
-                onClick={(p) => {
-                  const match = months.find((m) => periodLabel(m.key) === p.name);
-                  if (match) goDetail("month", match.key);
-                }}
-                ariaLabel={`${category} hours by month`}
-              />
-            ) : (
-              <p className="px-2 pb-4 text-xs text-muted">
-                One period in scope{months[0] ? ` (${periodLabel(months[0].key)})` : ""} —
-                trend appears when more months are loaded.
-              </p>
-            )}
-          </div>
-        </Card>
+        <VizContainer
+          blockId={`${category.toLowerCase()}-by-team`}
+          title={`${category} hours by team`}
+          subtitle="Click for the team detail"
+          items={byTeam.map((b) => ({ key: b.key, label: b.key, value: b.hours }))}
+          kinds={["horizontalBar", "verticalBar", "donut", "pie", "table"]}
+          defaultKind="horizontalBar"
+          color={color}
+          onItemClick={(key) => goDetail("team", key)}
+        />
+        <TrendContainer
+          blockId={`${category.toLowerCase()}-by-month`}
+          title={`${category} hours by month`}
+          points={months.map((m) => ({ key: m.key, label: periodLabel(m.key) }))}
+          series={[
+            { name: `${category} hours`, values: months.map((m) => m.hours), color },
+          ]}
+          onPointClick={(key) => goDetail("month", key)}
+        />
       </div>
     </div>
   );

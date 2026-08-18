@@ -5,11 +5,13 @@ import { CircleCheck, TriangleAlert } from "lucide-react";
 import { useDashboard } from "../DashboardContext";
 import { Card, CardHeader } from "../ui/primitives";
 import { EChart } from "../charts/EChart";
-import { compositionBar } from "../charts/builders";
+import { compositionBar, donut as donutChart } from "../charts/builders";
 import { ENTITY_COLORS, SERIES, AXIS } from "../charts/theme";
 import { computeComposition } from "@/core/metrics/engine";
 import { formatHours, formatPercent } from "@/core/format";
 import { goDetail } from "../navigation";
+import { useVizPreference } from "../viz/useVizPreference";
+import { Select } from "../ui/primitives";
 
 /**
  * Hours Composition — demonstrates that 100% of Total Hours is accounted
@@ -31,12 +33,27 @@ function segmentColor(key: string, kind: string, index: number): string {
   return ENTITY_COLORS[key] ?? SERIES[(index + 3) % SERIES.length];
 }
 
+const COMPOSITION_VIEWS = [
+  { id: "stacked", label: "100% Stacked Bar" },
+  { id: "donut", label: "Donut" },
+  { id: "pie", label: "Pie" },
+  { id: "table", label: "Table" },
+] as const;
+
 export function HoursComposition() {
   const { filtered, config } = useDashboard();
   const composition = React.useMemo(
     () => computeComposition(filtered, config.categories),
     [filtered, config.categories],
   );
+  const [selection, setSelection] = useVizPreference("hours-composition", {
+    metric: "hours-composition",
+    viz: "stacked",
+    dimension: "-",
+  });
+  const view = COMPOSITION_VIEWS.some((v) => v.id === selection.viz)
+    ? selection.viz
+    : "stacked";
 
   if (composition.totalHours === 0) return null;
 
@@ -61,17 +78,87 @@ export function HoursComposition() {
       <CardHeader
         title="Hours composition"
         subtitle={`Total Hours: ${formatHours(composition.totalHours)} — every hour in scope belongs to exactly one segment. Click a segment for its underlying records.`}
+        actions={
+          <Select
+            aria-label="View for Hours composition"
+            title="Change visualization — same data, different view"
+            data-testid="hours-composition-viz"
+            value={view}
+            onChange={(e) => setSelection({ ...selection, viz: e.target.value })}
+            className="h-7 text-xs"
+          >
+            {COMPOSITION_VIEWS.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.label}
+              </option>
+            ))}
+          </Select>
+        }
       />
       <div className="flex flex-col gap-3 px-5 pb-4">
-        <EChart
-          option={compositionBar(colored)}
-          height={40}
-          onClick={(p) => {
-            const seg = composition.segments.find((s) => s.key === p.seriesName);
-            if (seg) navigateSegment(seg.key, seg.kind);
-          }}
-          ariaLabel="Hours composition: share of total hours by segment"
-        />
+        {view === "stacked" ? (
+          <EChart
+            option={compositionBar(colored)}
+            height={40}
+            onClick={(p) => {
+              const seg = composition.segments.find((s) => s.key === p.seriesName);
+              if (seg) navigateSegment(seg.key, seg.kind);
+            }}
+            ariaLabel="Hours composition: share of total hours by segment"
+          />
+        ) : null}
+        {view === "donut" || view === "pie" ? (
+          <EChart
+            option={donutChart(
+              colored.map((s) => ({ name: s.key, value: s.hours })),
+              {
+                pie: view === "pie",
+                colors: Object.fromEntries(colored.map((s) => [s.key, s.color])),
+              },
+            )}
+            height={260}
+            onClick={(p) => {
+              const seg = composition.segments.find((s) => s.key === p.name);
+              if (seg) navigateSegment(seg.key, seg.kind);
+            }}
+            ariaLabel="Hours composition: share of total hours by segment"
+          />
+        ) : null}
+        {view === "table" ? (
+          <div className="overflow-x-auto rounded-md border border-grid">
+            <table className="w-full text-sm" data-testid="hours-composition-table">
+              <thead className="bg-page">
+                <tr className="text-left text-xs font-semibold text-ink-2">
+                  <th className="px-3 py-2">Segment</th>
+                  <th className="px-3 py-2 text-right">Hours</th>
+                  <th className="px-3 py-2 text-right">% of Total Hours</th>
+                </tr>
+              </thead>
+              <tbody>
+                {colored.map((seg) => (
+                  <tr
+                    key={seg.key}
+                    className="cursor-pointer border-t border-grid hover:bg-page"
+                    onClick={() => navigateSegment(seg.key, seg.kind)}
+                  >
+                    <td className="px-3 py-1.5 font-medium text-ink">{seg.key}</td>
+                    <td className="px-3 py-1.5 text-right tnum">{formatHours(seg.hours)}</td>
+                    <td className="px-3 py-1.5 text-right tnum">
+                      {formatPercent(seg.shareOfTotal)}
+                    </td>
+                  </tr>
+                ))}
+                <tr className="border-t border-grid bg-page text-xs font-semibold">
+                  <td className="px-3 py-1.5">Total</td>
+                  <td className="px-3 py-1.5 text-right tnum">
+                    {formatHours(composition.totalHours)}
+                  </td>
+                  <td className="px-3 py-1.5 text-right tnum">100.0%</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        ) : null}
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {colored.map((seg) => (
             <button

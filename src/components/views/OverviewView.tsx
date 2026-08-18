@@ -2,13 +2,12 @@
 
 import * as React from "react";
 import { useDashboard } from "../DashboardContext";
-import { Card, CardHeader } from "../ui/primitives";
-import { EChart } from "../charts/EChart";
-import { donut, horizontalBars, trendLines } from "../charts/builders";
-import { SERIES } from "../charts/theme";
+import { ENTITY_COLORS, SERIES } from "../charts/theme";
 import { KpiCards } from "../kpi/KpiCards";
 import { HoursComposition } from "../kpi/HoursComposition";
 import { MetricExplorer } from "../kpi/MetricExplorer";
+import { VizContainer } from "../viz/VizContainer";
+import { TrendContainer } from "../viz/TrendContainer";
 import { goDetail } from "../navigation";
 import { summarizeEmployees } from "@/core/metrics/engine";
 import { monthlyTrend, summarizeCodes, groupHours } from "@/core/metrics/aggregate";
@@ -17,8 +16,10 @@ import { periodLabel } from "@/core/format";
 /**
  * Executive overview — answers the 30-second questions: hours, billability,
  * productivity, IP/Accelerator split, top items, member utilization. Every
- * meaningful chart navigates into the underlying detail. Activity labels are
- * description-first (codes appear in tooltips), derived from configuration.
+ * chart renders through the global visualization framework: intelligent
+ * executive defaults, with context-aware alternative views the user can
+ * switch to. All data derives from the same filtered scope and engines —
+ * visualization type is a presentation choice, never a business-logic one.
  */
 export function OverviewView() {
   const { filtered, config } = useDashboard();
@@ -54,27 +55,24 @@ export function OverviewView() {
       byTeam.set(row.team, entry);
     }
     return [...byTeam.entries()].map(([name, v]) => ({
-      name,
+      key: name,
+      label: name,
       value: v.total === 0 ? 0 : (v.billable / v.total) * 100,
     }));
   }, [filtered]);
 
   const memberBillability = employees
     .slice(0, 12)
-    .map((e) => ({ name: e.employee, value: e.billablePercentage }))
+    .map((e) => ({ key: e.employee, label: e.employee, value: e.billablePercentage }))
     .sort((a, b) => b.value - a.value);
 
-  const codeBars = (list: typeof codes) =>
+  const codeItems = (list: typeof codes) =>
     list.map((c) => ({
-      name: c.description,
+      key: c.code,
+      label: c.description,
       value: c.hours,
       detail: `${c.code} · ${c.category}`,
     }));
-
-  const openCode = (list: typeof codes) => (p: { name?: string }) => {
-    const match = list.find((c) => c.description === p.name);
-    if (match) goDetail("code", match.code);
-  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -93,139 +91,98 @@ export function OverviewView() {
       <HoursComposition />
       <MetricExplorer />
       <div className="grid gap-4 lg:grid-cols-3">
-        <Card>
-          <CardHeader
-            title="Team billability"
-            subtitle="Billable share of each team's hours — click a bar for the team detail"
-          />
-          <div className="px-3 pb-3">
-            <EChart
-              option={horizontalBars(teamBillability, { format: "percent" })}
-              height={Math.max(140, teamBillability.length * 44 + 60)}
-              onClick={(p) => p.name && goDetail("team", p.name)}
-              ariaLabel="Billable percentage by team"
-            />
-          </div>
-        </Card>
-        <Card>
-          <CardHeader
-            title="IP vs Accelerator"
-            subtitle="Development hours split — click a segment for detail"
-          />
-          <div className="px-3 pb-3">
-            <EChart
-              option={donut([
-                { name: "IP", value: ipHours },
-                { name: "Accelerator", value: accHours },
-              ])}
-              height={240}
-              onClick={(p) => p.name && goDetail("category", p.name)}
-              ariaLabel="IP versus Accelerator hours"
-            />
-          </div>
-        </Card>
-        <Card>
-          <CardHeader
-            title="Where non-productive time goes"
-            subtitle="Largest non-productive categories — click a bar for detail"
-          />
-          <div className="px-3 pb-3">
-            <EChart
-              option={horizontalBars(
-                nonProductiveCategories.map((b) => ({ name: b.key, value: b.hours })),
-              )}
-              height={Math.max(140, nonProductiveCategories.length * 30 + 60)}
-              onClick={(p) => p.name && goDetail("category", p.name)}
-              ariaLabel="Hours in non-productive categories"
-            />
-          </div>
-        </Card>
+        <VizContainer
+          blockId="overview-team-billability"
+          title="Team billability"
+          subtitle="Billable share of each team's hours — click for the team detail"
+          items={teamBillability}
+          kinds={["horizontalBar", "verticalBar", "table"]}
+          defaultKind="horizontalBar"
+          format="percent"
+          onItemClick={(key) => goDetail("team", key)}
+        />
+        <VizContainer
+          blockId="overview-ip-accel"
+          title="IP vs Accelerator"
+          subtitle="Development hours split — click for detail"
+          items={[
+            { key: "IP", label: "IP", value: ipHours },
+            { key: "Accelerator", label: "Accelerator", value: accHours },
+          ]}
+          kinds={["donut", "pie", "horizontalBar", "verticalBar", "table"]}
+          defaultKind="donut"
+          colors={ENTITY_COLORS}
+          onItemClick={(key) => goDetail("category", key)}
+        />
+        <VizContainer
+          blockId="overview-nonproductive"
+          title="Where non-productive time goes"
+          subtitle="Largest non-productive categories — click for detail"
+          items={nonProductiveCategories.map((b) => ({
+            key: b.key,
+            label: b.key,
+            value: b.hours,
+          }))}
+          kinds={["horizontalBar", "verticalBar", "donut", "pie", "table"]}
+          defaultKind="horizontalBar"
+          onItemClick={(key) => goDetail("category", key)}
+        />
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader title="Top IPs" subtitle="By development hours — click a bar to drill down" />
-          <div className="px-3 pb-3">
-            <EChart
-              option={horizontalBars(codeBars(topIps), { labelWidth: 210 })}
-              height={Math.max(140, topIps.length * 32 + 60)}
-              onClick={openCode(topIps)}
-              ariaLabel="Top IPs by hours"
-            />
-          </div>
-        </Card>
-        <Card>
-          <CardHeader
-            title="Top accelerators"
-            subtitle="By development hours — click a bar to drill down"
-          />
-          <div className="px-3 pb-3">
-            <EChart
-              option={horizontalBars(codeBars(topAccelerators), {
-                labelWidth: 210,
-                color: SERIES[1],
-              })}
-              height={Math.max(140, topAccelerators.length * 32 + 60)}
-              onClick={openCode(topAccelerators)}
-              ariaLabel="Top accelerators by hours"
-            />
-          </div>
-        </Card>
+        <VizContainer
+          blockId="overview-top-ips"
+          title="Top IPs"
+          subtitle="By development hours — click to drill down"
+          items={codeItems(topIps)}
+          kinds={["horizontalBar", "verticalBar", "donut", "pie", "table"]}
+          defaultKind="horizontalBar"
+          labelWidth={210}
+          onItemClick={(key) => goDetail("code", key)}
+        />
+        <VizContainer
+          blockId="overview-top-accelerators"
+          title="Top accelerators"
+          subtitle="By development hours — click to drill down"
+          items={codeItems(topAccelerators)}
+          kinds={["horizontalBar", "verticalBar", "donut", "pie", "table"]}
+          defaultKind="horizontalBar"
+          labelWidth={210}
+          color={SERIES[1]}
+          onItemClick={(key) => goDetail("code", key)}
+        />
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader
-            title="Member billable utilization"
-            subtitle="Individual billable % — click a bar for the employee detail"
-          />
-          <div className="px-3 pb-3">
-            <EChart
-              option={horizontalBars(memberBillability, { format: "percent" })}
-              height={Math.max(160, memberBillability.length * 28 + 60)}
-              onClick={(p) => p.name && goDetail("employee", p.name)}
-              ariaLabel="Billable percentage by employee"
-            />
-          </div>
-        </Card>
-        <Card>
-          <CardHeader
-            title="Monthly trend"
-            subtitle="Billable % and Productive % by month — click a month for detail"
-          />
-          <div className="px-3 pb-3">
-            {trend.length > 1 ? (
-              <EChart
-                option={trendLines(
-                  trend.map((t) => periodLabel(t.month)),
-                  [
-                    {
-                      name: "Billable %",
-                      values: trend.map((t) => t.billablePercentage),
-                      color: SERIES[0],
-                    },
-                    {
-                      name: "Productive %",
-                      values: trend.map((t) => t.productivePercentage),
-                      color: SERIES[2],
-                    },
-                  ],
-                  { format: "percent" },
-                )}
-                height={260}
-                onClick={(p) => {
-                  const match = trend.find((t) => periodLabel(t.month) === p.name);
-                  if (match) goDetail("month", match.month);
-                }}
-                ariaLabel="Monthly billable and productive percentage trend"
-              />
-            ) : (
-              <p className="px-2 pb-4 text-xs text-muted">
-                One reporting period in scope
-                {trend[0] ? ` (${periodLabel(trend[0].month)})` : ""}. Trends appear
-                automatically when more months are loaded.
-              </p>
-            )}
-          </div>
-        </Card>
+        <VizContainer
+          blockId="overview-member-billability"
+          title="Member billable utilization"
+          subtitle="Individual billable % — click for the employee detail"
+          items={memberBillability}
+          kinds={["horizontalBar", "verticalBar", "table"]}
+          defaultKind="horizontalBar"
+          format="percent"
+          onItemClick={(key) => goDetail("employee", key)}
+        />
+        <TrendContainer
+          blockId="overview-monthly-trend"
+          title="Monthly trend"
+          subtitle="Billable % and Productive % by month — click a month for detail"
+          points={trend.map((t) => ({ key: t.month, label: periodLabel(t.month) }))}
+          series={[
+            {
+              name: "Billable %",
+              values: trend.map((t) => t.billablePercentage),
+              color: SERIES[0],
+            },
+            {
+              name: "Productive %",
+              values: trend.map((t) => t.productivePercentage),
+              color: SERIES[2],
+            },
+          ]}
+          format="percent"
+          onPointClick={(key) => goDetail("month", key)}
+          emptyMessage={`One reporting period in scope${trend[0] ? ` (${periodLabel(trend[0].month)})` : ""}. Trends appear automatically when more months are loaded.`}
+        />
       </div>
     </div>
   );

@@ -125,8 +125,16 @@ test("generates a self-contained executive snapshot that works offline", async (
   await snap.getByTestId("detail-back").click();
   await expect(snap.getByTestId("filter-chips")).toContainText("Team: IP Delivery Team");
 
+  // Per-chart visualization switching works inside the snapshot (§20):
+  // the Top IPs card can flip to a table and back using embedded data.
+  await snap.getByTestId("overview-top-ips-viz").selectOption("table");
+  await expect(snap.getByTestId("overview-top-ips-table")).toContainText(
+    "Digital Time entry Cockpit Simplified",
+  );
+  await snap.getByTestId("overview-top-ips-viz").selectOption("horizontalBar");
+
   // Chart drilldown: click a bar → detail with actual records → Back.
-  await clickTopChartBar(snap, "Top IPs by hours");
+  await clickTopChartBar(snap, "Top IPs");
   await expect(snap.getByTestId("detail-title")).toHaveText(
     "Digital Time entry Cockpit Simplified",
   );

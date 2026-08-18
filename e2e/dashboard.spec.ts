@@ -144,6 +144,35 @@ test("imports the monthly excel, computes KPIs, filters and drills down", async 
   await expect(page.getByTestId("reconciliation-ok")).toBeVisible();
   await page.getByTestId("clear-filters").click();
 
+  // Global visualization switching: every chart card has a subtle View
+  // control backed by ONE framework. Representative checks:
+  // Top IPs → table (same data, exact values), drilldown from the table,
+  // Back restores the chosen visualization.
+  await page.getByTestId("overview-top-ips-viz").selectOption("table");
+  await expect(page.getByTestId("overview-top-ips-table")).toContainText(
+    "Digital Time entry Cockpit Simplified",
+  );
+  await expect(page.getByTestId("overview-top-ips-table")).toContainText("14");
+  await page
+    .getByTestId("overview-top-ips-table")
+    .getByText("Digital Time entry Cockpit Simplified")
+    .click();
+  await expect(page.getByTestId("detail-title")).toHaveText(
+    "Digital Time entry Cockpit Simplified",
+  );
+  await page.getByTestId("detail-back").click();
+  await expect(page.getByTestId("overview-top-ips-viz")).toHaveValue("table");
+  // Donut view of the same card renders from the same buckets.
+  await page.getByTestId("overview-top-ips-viz").selectOption("donut");
+  await expect(page.getByTestId("overview-top-ips-body").locator("canvas")).toBeVisible();
+  await page.getByTestId("overview-top-ips-viz").selectOption("horizontalBar");
+
+  // Hours Composition also supports alternative views (stacked → table).
+  await page.getByTestId("hours-composition-viz").selectOption("table");
+  await expect(page.getByTestId("hours-composition-table")).toContainText("Billable");
+  await expect(page.getByTestId("hours-composition-table")).toContainText("86.5");
+  await page.getByTestId("hours-composition-viz").selectOption("stacked");
+
   // Metric explorer: same data, switchable visualization + breakdown.
   await expect(page.getByTestId("metric-explorer")).toBeVisible();
   await expect(page.getByTestId("viz-metric")).toHaveValue("ip_hours");

@@ -272,6 +272,63 @@ export function compositionBar(
   };
 }
 
+/** Grouped vertical bars over ordered categories (time-series alternative). */
+export function groupedVerticalBars(
+  categories: string[],
+  series: { name: string; values: number[]; color: string }[],
+  options: { format?: ValueFormat } = {},
+): EChartsCoreOption {
+  const format = options.format ?? "hours";
+  return {
+    tooltip: {
+      trigger: "axis",
+      ...TOOLTIP_STYLE,
+      valueFormatter: (v: number) => fmt(v, format),
+    },
+    legend:
+      series.length > 1
+        ? {
+            top: 0,
+            icon: "rect",
+            itemWidth: 12,
+            itemHeight: 12,
+            textStyle: { color: INK_2, fontFamily: FONT, fontSize: 12 },
+          }
+        : undefined,
+    grid: {
+      left: 8,
+      right: 16,
+      top: series.length > 1 ? 32 : 16,
+      bottom: 8,
+      containLabel: true,
+    },
+    xAxis: {
+      type: "category",
+      data: categories,
+      axisLabel: AXIS_LABEL,
+      axisLine: AXIS_LINE,
+      axisTick: { show: false },
+    },
+    yAxis: {
+      type: "value",
+      max: format === "percent" ? 100 : undefined,
+      axisLabel: {
+        ...AXIS_LABEL,
+        formatter: (v: number) => (format === "percent" ? `${v}%` : formatHours(v)),
+      },
+      splitLine: SPLIT_LINE,
+      axisLine: { show: false },
+    },
+    series: series.map((s) => ({
+      name: s.name,
+      type: "bar" as const,
+      data: s.values,
+      barMaxWidth: 20,
+      itemStyle: { color: s.color, borderRadius: [4, 4, 0, 0] },
+    })),
+  };
+}
+
 export interface TrendSeries {
   name: string;
   values: number[];

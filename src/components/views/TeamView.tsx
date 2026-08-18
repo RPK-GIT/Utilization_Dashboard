@@ -5,8 +5,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { useDashboard } from "../DashboardContext";
 import { Card, CardHeader } from "../ui/primitives";
 import { DataTable } from "../tables/DataTable";
-import { EChart } from "../charts/EChart";
-import { horizontalBars } from "../charts/builders";
+import { VizContainer } from "../viz/VizContainer";
 import { goDetail } from "../navigation";
 import { summarizeEmployees, type EmployeeSummary } from "@/core/metrics/engine";
 import { formatHours, formatPercent } from "@/core/format";
@@ -79,20 +78,16 @@ export function TeamView() {
 
   return (
     <div className="flex flex-col gap-4">
-      <Card>
-        <CardHeader
-          title="Billable utilization ranking"
-          subtitle="Individual billable % (overall percentages are always computed from summed hours, not averaged) — click a bar for detail"
-        />
-        <div className="px-3 pb-3">
-          <EChart
-            option={horizontalBars(ranking, { format: "percent" })}
-            height={Math.max(180, ranking.length * 26 + 60)}
-            onClick={(p) => p.name && goDetail("employee", p.name)}
-            ariaLabel="Billable percentage ranking by employee"
-          />
-        </div>
-      </Card>
+      <VizContainer
+        blockId="team-ranking"
+        title="Billable utilization ranking"
+        subtitle="Individual billable % (overall percentages are always computed from summed hours, not averaged) — click for detail"
+        items={ranking.map((r) => ({ key: r.name, label: r.name, value: r.value }))}
+        kinds={["horizontalBar", "verticalBar", "table"]}
+        defaultKind="horizontalBar"
+        format="percent"
+        onItemClick={(key) => goDetail("employee", key)}
+      />
       <Card>
         <CardHeader
           title="Team utilization detail"

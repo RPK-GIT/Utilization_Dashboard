@@ -20,7 +20,7 @@ import {
 } from "@/core/metrics/explorer";
 import { formatHours, formatPercent } from "@/core/format";
 import { goDetail } from "../navigation";
-import { loadPresentation, savePresentation } from "../filterPersistence";
+import { useVizPreference } from "../viz/useVizPreference";
 
 /**
  * Metric analysis explorer — one reusable block where the user picks the
@@ -41,36 +41,16 @@ function bucketColor(bucket: ExplorerBucket, index: number): string {
   return ENTITY_COLORS[bucket.key] ?? SERIES[index % SERIES.length];
 }
 
-function useVizSelection(): [VizSelection, (next: VizSelection) => void] {
-  const { presentationKey, initialPresentation } = useDashboard();
-  const defaults = React.useMemo<VizSelection>(() => {
-    const def = explorerMetric("ip_hours");
-    return {
-      metric: def.id,
-      viz: def.defaultVisualization,
-      dimension: def.defaultDimension,
-    };
-  }, []);
-  const [selection, setSelection] = React.useState<VizSelection>(() => {
-    const stored = loadPresentation(presentationKey)[BLOCK_ID];
-    const seeded = initialPresentation?.[BLOCK_ID];
-    return (stored ?? seeded ?? defaults) as VizSelection;
-  });
-  const update = React.useCallback(
-    (next: VizSelection) => {
-      setSelection(next);
-      const all = loadPresentation(presentationKey);
-      all[BLOCK_ID] = next;
-      savePresentation(presentationKey, all);
-    },
-    [presentationKey],
-  );
-  return [selection, update];
-}
-
 export function MetricExplorer() {
   const { filtered, config } = useDashboard();
-  const [selection, setSelection] = useVizSelection();
+  const explorerDefaults = explorerMetric("ip_hours");
+  const [stored, setStored] = useVizPreference(BLOCK_ID, {
+    metric: explorerDefaults.id,
+    viz: explorerDefaults.defaultVisualization,
+    dimension: explorerDefaults.defaultDimension,
+  });
+  const selection = stored as VizSelection;
+  const setSelection = setStored as (next: VizSelection) => void;
 
   const def = explorerMetric(selection.metric);
   // Sanitize stale stored state against the registry.

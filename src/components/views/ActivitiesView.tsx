@@ -2,17 +2,15 @@
 
 import * as React from "react";
 import { useDashboard } from "../DashboardContext";
-import { Card, CardHeader } from "../ui/primitives";
-import { EChart } from "../charts/EChart";
-import { horizontalBars } from "../charts/builders";
+import { VizContainer } from "../viz/VizContainer";
 import { goDetail } from "../navigation";
 import { groupHours, summarizeCodes } from "@/core/metrics/aggregate";
 import { formatHours } from "@/core/format";
 
 /**
  * Activity analysis — where non-billable capacity goes (Learning, Leave,
- * meetings, idle, …). Clicking a category opens the routed category detail
- * with the actual underlying records.
+ * meetings, idle, …). Both blocks render through the global visualization
+ * framework and drill into the routed category/activity details.
  */
 export function ActivitiesView() {
   const { filtered, config } = useDashboard();
@@ -41,46 +39,30 @@ export function ActivitiesView() {
 
   return (
     <div className="flex flex-col gap-4">
-      <Card>
-        <CardHeader
-          title="Non-productive activity distribution"
-          subtitle={`${formatHours(total)} hours outside billable, IP and accelerator work — click a bar for the category detail and its records`}
-        />
-        <div className="px-3 pb-3">
-          <EChart
-            option={horizontalBars(
-              buckets.map((b) => ({ name: b.key, value: b.hours })),
-            )}
-            height={Math.max(200, buckets.length * 30 + 60)}
-            onClick={(p) => p.name && goDetail("category", p.name)}
-            ariaLabel="Hours by non-productive activity category"
-          />
-        </div>
-      </Card>
-      <Card>
-        <CardHeader
-          title="Largest non-productive activities"
-          subtitle="Description-first; click a bar for the activity detail"
-        />
-        <div className="px-3 pb-3">
-          <EChart
-            option={horizontalBars(
-              nonProductiveCodes.map((c) => ({
-                name: c.description,
-                value: c.hours,
-                detail: `${c.code} · ${c.category}`,
-              })),
-              { labelWidth: 220 },
-            )}
-            height={Math.max(180, nonProductiveCodes.length * 30 + 60)}
-            onClick={(p) => {
-              const match = nonProductiveCodes.find((c) => c.description === p.name);
-              if (match) goDetail("code", match.code);
-            }}
-            ariaLabel="Hours by non-productive activity"
-          />
-        </div>
-      </Card>
+      <VizContainer
+        blockId="activities-categories"
+        title="Non-productive activity distribution"
+        subtitle={`${formatHours(total)} hours outside billable, IP and accelerator work — click for the category detail and its records`}
+        items={buckets.map((b) => ({ key: b.key, label: b.key, value: b.hours }))}
+        kinds={["horizontalBar", "verticalBar", "donut", "pie", "table"]}
+        defaultKind="horizontalBar"
+        onItemClick={(key) => goDetail("category", key)}
+      />
+      <VizContainer
+        blockId="activities-top"
+        title="Largest non-productive activities"
+        subtitle="Description-first; click for the activity detail"
+        items={nonProductiveCodes.map((c) => ({
+          key: c.code,
+          label: c.description,
+          value: c.hours,
+          detail: `${c.code} · ${c.category}`,
+        }))}
+        kinds={["horizontalBar", "verticalBar", "donut", "pie", "table"]}
+        defaultKind="horizontalBar"
+        labelWidth={220}
+        onItemClick={(key) => goDetail("code", key)}
+      />
     </div>
   );
 }
