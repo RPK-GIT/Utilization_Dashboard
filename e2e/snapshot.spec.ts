@@ -97,6 +97,11 @@ test("generates a self-contained executive snapshot that works offline", async (
   await snap.getByTestId("kpi-card-total_hours").click();
   await expect(snap.getByTestId("detail-title")).toHaveText("Total hours");
   await expect(snap.getByTestId("detail-transactions")).toBeVisible();
+  // The Back button floats while scrolling long tables in the snapshot too.
+  await snap.mouse.wheel(0, 10000);
+  await snap.waitForTimeout(200);
+  await expect(snap.getByTestId("detail-back")).toHaveCount(1);
+  await expect(snap.getByTestId("detail-back")).toBeInViewport();
   await snap.getByTestId("detail-back").click();
   await expect(snap.getByTestId("kpi-total_hours")).toHaveText("42");
 

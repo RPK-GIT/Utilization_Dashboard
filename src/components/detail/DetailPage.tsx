@@ -1,9 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { ArrowLeft } from "lucide-react";
 import { useDashboard } from "../DashboardContext";
-import { Badge, Button, Card, CardHeader } from "../ui/primitives";
+import { BackButton } from "./BackButton";
+import { Badge, Card, CardHeader } from "../ui/primitives";
 import { EChart } from "../charts/EChart";
 import { horizontalBars, trendLines } from "../charts/builders";
 import { SERIES } from "../charts/theme";
@@ -11,7 +11,7 @@ import { TransactionsTable } from "../tables/TransactionsTable";
 import { formatHours, formatPercent, periodLabel } from "@/core/format";
 import { billableHours, sumHours } from "@/core/metrics/engine";
 import { groupHours, hoursByMonth, summarizeCodes } from "@/core/metrics/aggregate";
-import { goBack, goDetail, type DetailRoute } from "../navigation";
+import { goDetail, type DetailRoute } from "../navigation";
 import type { ClassifiedRow } from "@/core/types";
 
 /**
@@ -40,21 +40,18 @@ function DetailShell({
   subtitle?: string;
   children: React.ReactNode;
 }) {
+  // BackButton is a direct child of the full-height column so its sticky
+  // positioning tracks the whole page, floating below the header on scroll.
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-start gap-3">
-        <Button variant="secondary" onClick={() => goBack()} data-testid="detail-back">
-          <ArrowLeft className="h-4 w-4" />
-          Back
-        </Button>
-        <div>
-          <h2 className="text-lg font-semibold text-ink" data-testid="detail-title">
-            {title}
-          </h2>
-          {subtitle ? <p className="mt-0.5 text-xs text-muted">{subtitle}</p> : null}
-        </div>
+    <div className="flex flex-col gap-3">
+      <BackButton />
+      <div>
+        <h2 className="text-lg font-semibold text-ink" data-testid="detail-title">
+          {title}
+        </h2>
+        {subtitle ? <p className="mt-0.5 text-xs text-muted">{subtitle}</p> : null}
       </div>
-      {children}
+      <div className="flex flex-col gap-4">{children}</div>
     </div>
   );
 }

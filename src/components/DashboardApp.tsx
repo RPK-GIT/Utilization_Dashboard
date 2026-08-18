@@ -81,6 +81,24 @@ export function DashboardApp({
 
   const showFilters = detail ? true : !current?.hideFilters;
 
+  // Publish the sticky header's height as a CSS variable so floating
+  // controls (the detail Back button) always stick just below it, whatever
+  // the current filter-chip rows add to its height.
+  const headerRef = React.useRef<HTMLElement>(null);
+  React.useEffect(() => {
+    const header = headerRef.current;
+    if (!header) return;
+    const update = () =>
+      document.documentElement.style.setProperty(
+        "--app-header-h",
+        `${header.offsetHeight}px`,
+      );
+    const observer = new ResizeObserver(update);
+    observer.observe(header);
+    update();
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <div className="flex min-h-screen">
       <aside className="sticky top-0 flex h-screen w-56 shrink-0 flex-col border-r border-grid bg-surface max-lg:w-14">
@@ -128,7 +146,10 @@ export function DashboardApp({
         ) : null}
       </aside>
       <div className="min-w-0 flex-1">
-        <header className="sticky top-0 z-20 border-b border-grid bg-page/95 px-6 py-3 backdrop-blur">
+        <header
+          ref={headerRef}
+          className="sticky top-0 z-20 border-b border-grid bg-page/95 px-6 py-3 backdrop-blur"
+        >
           <div className="flex items-center justify-between gap-3">
             <div>
               <h1 className="text-lg font-semibold text-ink">

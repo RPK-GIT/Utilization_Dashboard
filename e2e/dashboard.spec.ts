@@ -148,6 +148,13 @@ test("imports the monthly excel, computes KPIs, filters and drills down", async 
   await page.getByTestId("kpi-card-total_hours").click();
   await expect(page.getByTestId("detail-title")).toHaveText("Total hours");
   await expect(page.getByTestId("detail-transactions")).toBeVisible();
+
+  // The Back button floats: after scrolling to the bottom of the detail page
+  // it is still inside the viewport and clickable — exactly one instance.
+  await page.mouse.wheel(0, 10000);
+  await page.waitForTimeout(200);
+  await expect(page.getByTestId("detail-back")).toHaveCount(1);
+  await expect(page.getByTestId("detail-back")).toBeInViewport();
   await page.getByTestId("detail-back").click();
   await expect(page.getByTestId("kpi-total_hours")).toBeVisible();
 
