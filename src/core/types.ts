@@ -203,4 +203,6 @@ export interface SnapshotPayload {
   config: SnapshotConfig;
   initialFilters: FilterState;
   availablePeriods: { period: string; label: string }[];
+  /** Visualization selections active at generation time (presentation only). */
+  presentation?: Record<string, { metric: string; viz: string; dimension: string }>;
 }

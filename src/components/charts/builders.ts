@@ -102,10 +102,75 @@ export function horizontalBars(
   };
 }
 
+/** Vertical bar (column) chart — one measure, single hue, values on caps. */
+export function verticalBars(
+  items: NamedValue[],
+  options: { format?: ValueFormat; color?: string } = {},
+): EChartsCoreOption {
+  const format = options.format ?? "hours";
+  return {
+    tooltip: {
+      trigger: "item",
+      ...TOOLTIP_STYLE,
+      formatter: (p: { name: string; value: number; dataIndex: number }) => {
+        const item = items[p.dataIndex];
+        const detail = item?.detail
+          ? `<br/><span style="color:${INK_2};font-size:11px">${escapeHtml(item.detail)}</span>`
+          : "";
+        return `<strong>${fmt(p.value, format)}</strong>&nbsp;&nbsp;<span style="color:${INK_2}">${escapeHtml(p.name)}</span>${detail}`;
+      },
+    },
+    grid: { left: 8, right: 16, top: 24, bottom: 8, containLabel: true },
+    xAxis: {
+      type: "category",
+      data: items.map((i) => i.name),
+      axisLabel: {
+        ...AXIS_LABEL,
+        color: INK_2,
+        interval: 0,
+        rotate: items.length > 5 ? 30 : 0,
+        width: 110,
+        overflow: "truncate" as const,
+      },
+      axisLine: AXIS_LINE,
+      axisTick: { show: false },
+    },
+    yAxis: {
+      type: "value",
+      axisLabel: {
+        ...AXIS_LABEL,
+        formatter: (v: number) => (format === "percent" ? `${v}%` : formatHours(v)),
+      },
+      splitLine: SPLIT_LINE,
+      axisLine: { show: false },
+    },
+    series: [
+      {
+        type: "bar",
+        data: items.map((i) => i.value),
+        barMaxWidth: 24,
+        barCategoryGap: "40%",
+        itemStyle: {
+          color: options.color ?? SERIES[0],
+          borderRadius: [4, 4, 0, 0],
+        },
+        label: {
+          show: true,
+          position: "top" as const,
+          color: INK,
+          fontFamily: FONT,
+          fontSize: 11,
+          formatter: (p: { value: number }) => fmt(p.value, format),
+        },
+      },
+    ],
+  };
+}
+
 /** Donut for a small part-to-whole split (≤ 6 segments). Color follows entity. */
 export function donut(
   items: NamedValue[],
-  options: { colors?: Record<string, string> } = {},
+  options: { colors?: Record<string, string>; pie?: boolean } = {},
 ): EChartsCoreOption {
   const colors = options.colors ?? ENTITY_COLORS;
   return {
@@ -125,7 +190,7 @@ export function donut(
     series: [
       {
         type: "pie",
-        radius: ["48%", "70%"],
+        radius: options.pie ? ["0%", "70%"] : ["48%", "70%"],
         center: ["50%", "47%"],
         avoidLabelOverlap: true,
         // 2px surface gap between segments via a surface-colored border.

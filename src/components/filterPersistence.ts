@@ -42,3 +42,36 @@ export function saveFilters(key: string, filters: FilterState): void {
     // survives in-app navigation via React state.
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* Presentation (visualization) preferences — session-scoped, NEVER    */
+/* part of the business configuration.                                 */
+/* ------------------------------------------------------------------ */
+
+export interface StoredVizSelection {
+  metric: string;
+  viz: string;
+  dimension: string;
+}
+
+export function loadPresentation(key: string): Record<string, StoredVizSelection> {
+  try {
+    const raw = window.sessionStorage.getItem(key);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+export function savePresentation(
+  key: string,
+  value: Record<string, StoredVizSelection>,
+): void {
+  try {
+    window.sessionStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Non-fatal — presentation preferences simply reset next session.
+  }
+}

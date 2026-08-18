@@ -25,8 +25,10 @@ export function buildSnapshotPayload(args: {
   filters: FilterState;
   scope: "current-view" | "full";
   generatedAt: string;
+  /** Visualization selections active at generation time (presentation only). */
+  presentation?: SnapshotPayload["presentation"];
 }): SnapshotPayload {
-  const { datasets, config, filters, scope, generatedAt } = args;
+  const { datasets, config, filters, scope, generatedAt, presentation } = args;
   const allRows: ClassifiedRow[] = datasets.flatMap((d) => d.classified);
   const effectiveFilters = scope === "current-view" ? filters : { ...EMPTY_FILTERS };
 
@@ -68,6 +70,7 @@ export function buildSnapshotPayload(args: {
     },
     initialFilters: effectiveFilters,
     availablePeriods: periods.map((p) => ({ period: p, label: periodLabel(p) })),
+    presentation,
   };
 }
 

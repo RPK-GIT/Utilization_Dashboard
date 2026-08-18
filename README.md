@@ -34,11 +34,14 @@ review the validation summary, confirm — the dashboard is live.
    confirmed or edited; re-importing an existing period requires an explicit
    replace. Each dataset stores the configuration version it was classified
    with, plus a frozen copy of that configuration.
-4. **Analyze** — Overview (KPIs plus an **Hours Composition** bar proving
-   100% of Total Hours is accounted for: Billable + each productive category +
-   Other, with a clickable Other-hours breakdown that reconciles exactly),
-   Team Utilization, IP & Accelerators, Activities, Detailed Analysis,
-   Data Quality. All KPIs, charts, tables and drilldowns
+4. **Analyze** — Overview (KPIs, an **Hours Composition** bar proving 100% of
+   Total Hours is accounted for, and a **Metric analysis explorer** where the
+   metric, visualization — KPI/donut/pie/bars/line/table, context-aware per
+   metric — and breakdown dimension are switchable without changing any
+   calculation), Team Utilization, IP & Accelerators, Activities, Detailed
+   Analysis, Data Quality. Visualization choices are session presentation
+   preferences (never business configuration) and are embedded into
+   generated snapshots. All KPIs, charts, tables and drilldowns
    respond to the shared filter bar (period, team, employee, category,
    activity, date range) with active filters shown as chips. Activities are
    always **description-first** — "Digital Time entry Cockpit Simplified

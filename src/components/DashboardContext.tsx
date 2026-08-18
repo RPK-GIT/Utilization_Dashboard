@@ -35,6 +35,10 @@ export interface DashboardData {
   setFilters: (filters: FilterState) => void;
   availablePeriods: { period: string; label: string }[];
   meta: DashboardMeta;
+  /** Session-storage key for visualization (presentation) preferences. */
+  presentationKey: string;
+  /** Seed presentation state (a snapshot's embedded visualization selections). */
+  initialPresentation?: Record<string, { metric: string; viz: string; dimension: string }>;
 }
 
 const DashboardContext = React.createContext<DashboardData | null>(null);

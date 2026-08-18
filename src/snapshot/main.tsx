@@ -80,6 +80,8 @@ function SnapshotViewer({ payload }: { payload: SnapshotPayload }) {
           generatedAt: payload.generatedAt,
           dataThrough: payload.dataThrough,
         },
+        presentationKey: `snapshot:viz:${payload.generatedAt}`,
+        initialPresentation: payload.presentation,
       }}
     >
       <DashboardApp sections={SECTIONS} />

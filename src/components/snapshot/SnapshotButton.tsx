@@ -12,6 +12,7 @@ import {
 } from "@/core/snapshot/build";
 import { hasActiveFilters } from "@/core/filters/engine";
 import { activityLabel, periodLabel } from "@/core/format";
+import { loadPresentation } from "../filterPersistence";
 
 /**
  * Executive snapshot generation — one clear action in a centered modal.
@@ -105,13 +106,15 @@ export function SnapshotButton() {
       setStepsDone(1);
       await delay(150);
 
-      // 2. Applying filters — freeze the APPLIED filter state into the payload.
+      // 2. Applying filters — freeze the APPLIED filter state and the current
+      // visualization selections into the payload.
       const payload = buildSnapshotPayload({
         datasets,
         config,
         filters,
         scope: "current-view",
         generatedAt: new Date().toISOString(),
+        presentation: loadPresentation("utilization:viz"),
       });
       setStepsDone(2);
       await delay(150);

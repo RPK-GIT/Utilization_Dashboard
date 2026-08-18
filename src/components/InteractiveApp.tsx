@@ -161,6 +161,7 @@ export function InteractiveApp() {
           generatedAt: null,
           dataThrough: null,
         },
+        presentationKey: "utilization:viz",
       }}
     >
       <DashboardApp

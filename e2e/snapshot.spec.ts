@@ -48,6 +48,9 @@ test("generates a self-contained executive snapshot that works offline", async (
   await applyMultiFilter(page, "filter-team", ["IP Delivery Team"]);
   await selectFilterValues(page, "filter-team", ["Development Team"]); // draft only
 
+  // Choose a non-default visualization — the snapshot must preserve it.
+  await page.getByTestId("viz-type").selectOption("table");
+
   // Single clear action in a centered modal that summarizes the APPLIED state.
   await page.getByTestId("generate-snapshot").click();
   await expect(page.getByTestId("snapshot-filter-summary")).toContainText(
@@ -84,6 +87,16 @@ test("generates a self-contained executive snapshot that works offline", async (
   await expect(snap.getByTestId("filter-chips")).toContainText("Team: IP Delivery Team");
   await expect(snap.getByText("frozen point-in-time snapshot")).toBeVisible();
   expect(await snap.locator("canvas").count()).toBeGreaterThan(0);
+
+  // The snapshot preserves the selected visualization and still allows
+  // changing it from the embedded data.
+  await expect(snap.getByTestId("viz-type")).toHaveValue("table");
+  await expect(snap.getByTestId("viz-table")).toContainText(
+    "Digital Time entry Cockpit Simplified",
+  );
+  await snap.getByTestId("viz-type").selectOption("donut");
+  await expect(snap.getByTestId("viz-body").locator("canvas")).toBeVisible();
+  await snap.getByTestId("viz-type").selectOption("table");
 
   // Hours composition works inside the snapshot (filtered scope: 42 total).
   await expect(snap.getByTestId("hours-composition")).toContainText("Total Hours: 42");

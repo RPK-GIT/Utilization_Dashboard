@@ -144,6 +144,49 @@ test("imports the monthly excel, computes KPIs, filters and drills down", async 
   await expect(page.getByTestId("reconciliation-ok")).toBeVisible();
   await page.getByTestId("clear-filters").click();
 
+  // Metric explorer: same data, switchable visualization + breakdown.
+  await expect(page.getByTestId("metric-explorer")).toBeVisible();
+  await expect(page.getByTestId("viz-metric")).toHaveValue("ip_hours");
+  // Table view shows exact values (IP: DTEC 14, PCSI 6, 2PC 2.5 = 22.5).
+  await page.getByTestId("viz-type").selectOption("table");
+  await expect(page.getByTestId("viz-table")).toContainText(
+    "Digital Time entry Cockpit Simplified",
+  );
+  await expect(page.getByTestId("viz-table")).toContainText("22.5");
+  // Every meaningful visualization renders from the same buckets.
+  for (const viz of ["donut", "pie", "verticalBar", "horizontalBar"]) {
+    await page.getByTestId("viz-type").selectOption(viz);
+    await expect(page.getByTestId("viz-body").locator("canvas")).toBeVisible();
+  }
+  // Line requires an ordered axis — selecting it switches breakdown to Month.
+  await page.getByTestId("viz-type").selectOption("line");
+  await expect(page.getByTestId("viz-dimension")).toHaveValue("month");
+  // KPI view: single number, no meaningless chart.
+  await page.getByTestId("viz-type").selectOption("kpi");
+  await expect(page.getByTestId("viz-body")).toContainText("of Total Hours");
+  // Total Hours metric never offers pie/donut.
+  await page.getByTestId("viz-metric").selectOption("total_hours");
+  await expect(page.getByTestId("viz-type").locator('option[value="pie"]')).toHaveCount(0);
+  await expect(page.getByTestId("viz-type").locator('option[value="donut"]')).toHaveCount(0);
+
+  // Filters + visualization: filtered dataset feeds every view identically.
+  await page.getByTestId("viz-metric").selectOption("ip_hours");
+  await page.getByTestId("viz-type").selectOption("table");
+  await applyMultiFilter(page, "filter-team", ["IP Delivery Team"]);
+  await expect(page.getByTestId("viz-table")).toContainText("14"); // DTEC only
+  await expect(page.getByTestId("viz-table")).not.toContainText("Procurement");
+
+  // Drilldown from the explorer table; Back restores the visualization state.
+  await page.getByTestId("viz-table").getByText("Digital Time entry Cockpit").click();
+  await expect(page.getByTestId("detail-title")).toHaveText(
+    "Digital Time entry Cockpit Simplified",
+  );
+  await page.getByTestId("detail-back").click();
+  await expect(page.getByTestId("viz-type")).toHaveValue("table");
+  await expect(page.getByTestId("viz-metric")).toHaveValue("ip_hours");
+  await expect(page.getByTestId("filter-chips")).toContainText("Team: IP Delivery Team");
+  await page.getByTestId("clear-filters").click();
+
   // Total Hours KPI navigates to a routed detail with Back.
   await page.getByTestId("kpi-card-total_hours").click();
   await expect(page.getByTestId("detail-title")).toHaveText("Total hours");
